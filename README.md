@@ -77,6 +77,6 @@ The experimental campaign design is directly compared against the setups detaile
 * L. Abeni, D. Faggioli, *Using Xen and KVM as real-time hypervisors*, Journal of Systems Architecture, vol. 106, 2020. [DOI: 10.1016/j.sysarc.2020.101709](https://doi.org/10.1016/j.sysarc.2020.101709)
 * [Unikraft Documentation](https://unikraft.org/docs)
 * Kuenzer et al., *Unikraft: Fast, Specialized Unikernels the Easy Way*, EuroSys 2021.
-* M. Cinque, L. De Simone, D. Ottaviano, *Temporal isolation assessment in virtualized safety-critical mixed-criticality systems: A case study on Xen hypervisor*, The Journal of Systems and Software, vol. 216, 112147, 2024. [DOI: 10.1016/j.jss.2024.112147](https://doi.org/10.1016/j.jss.2024.112147)
-* L. Abeni, *Virtualized real-time workloads in containers and virtual machines*, Journal of Systems Architecture, vol. 154, 103238, 2024. [DOI: 10.1016/j.sysarc.2024.103238](https://doi.org/10.1016/j.sysarc.2024.103238)
+* M. Cinque, L. De Simone, D. Ottaviano, *Temporal isolation assessment in virtualized safety-critical mixed-criticality systems: A case study on Xen hypervisor*, The Journal of Systems and Software, vol. 216, 112147, 2024. [DOI: 10.1016/j.jss.2024.112147](https://www.sciencedirect.com/science/article/pii/S0164121224001924)
+* L. Abeni, *Virtualized real-time workloads in containers and virtual machines*, Journal of Systems Architecture, vol. 154, 103238, 2024. [DOI: 10.1016/j.sysarc.2024.103238](https://www.sciencedirect.com/science/article/pii/S1383762124001759)
 ---
