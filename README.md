@@ -79,5 +79,3 @@ The experimental campaign design is directly compared against the setups detaile
 * Kuenzer et al., *Unikraft: Fast, Specialized Unikernels the Easy Way*, EuroSys 2021.
 
 ---
-
-## Repository Structure
