@@ -1,0 +1,99 @@
+# Setup 
+This chapter outlines the complete experimental testbed configuration required to evaluate Xen and KVM under mixed-criticality workloads. To ensure reliable, predictable, and reproducible latency measurements, the host environment must be strictly tailored for real-time execution. 
+
+The following sections detail the step-by-step preparation of the system, starting with the installation and tuning of the host operating system, the compilation of a fully preemptible Linux kernel (`PREEMPT_RT`), and the deployment of the respective hypervisors. We then detail both hypervisors' configuration, focusing on the differences between the two.
+
+## Patching Linux with PREEMPT_RT
+
+* First, we downloaded the official kernel source code from the [Linux Kernel Archive](https://cdn.kernel.org/pub/linux/kernel/).
+* We extracted the archive using the following command:
+  ```bash
+  tar -xzvf ~/Downloads/linux-6.12.89.tar.gz -C ~/
+  ```
+
+* Next, we installed the necessary dependencies to build the kernel:
+  ```bash
+  sudo apt install libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf llvm qtcreator qtbase5-dev qt5-qmake cmake
+  ```
+
+* We navigated into the Linux build tree and copied the configuration file from the currently running system:
+  ```bash
+  cd ~/linux-6.12.89
+  cp /boot/config-$(uname -r) .config
+  ```
+
+* To fix potential configuration issues arising from the kernel version mismatch, we updated the configuration:
+  ```bash
+  make olddefconfig
+  ```
+
+* Subsequently, we downloaded the matching PREEMPT_RT patch from the [Linux Foundation Real-Time Wiki](https://wiki.linuxfoundation.org/realtime/start) and extracted it:
+  ```bash
+  gunzip -c ~/Downloads/patch-6.12.89-rt18.patch.gz > ~/patch-6.12.89-rt18.patch
+  ```
+
+* Returning to the build tree, we applied the patch and opened the configuration GUI:
+  ```bash
+  cd ~/linux-6.12.89
+  patch -p1 < ../patch-6.12.89-rt18.patch
+  make xconfig
+  ```
+
+* In the configuration menu, we navigated to General Setup -> Preemption Model and set it to Fully Preemptible Kernel (RT).
+
+* To streamline the build by compiling only the currently loaded modules, we ran:
+  ```bash
+  make localmodconfig
+  ```
+
+* We opened the configuration menu again (`make xconfig`) to manually disable specific features to reduce latency, strictly in the following order:
+  * `CONFIG_SCHED_MC_PRIO` (**Processor type and features** -> **Multi-core scheduler support**)
+  * `CONFIG_CPU_FREQ` (**Power management and ACPI options** -> **CPU Frequency scaling**)
+  * `CONFIG_ACPI_PROCESSOR` (**Power management and ACPI options** -> **ACPI (Advanced Configuration and Power Interface)**)
+  * `CONFIG_CPU_IDLE` (**Power management and ACPI options** -> **CPU idle PM support**)
+  * **Simultaneous Multi-threading** (if supported by the hardware)
+
+* We also ensured NVMe support was enabled:
+  * `CONFIG_BLK_DEV_NVME` (**Device Drivers** -> **NVME Support** -> **NVM Express block device**)
+
+* For Ubuntu specifically, it is necessary to clear the Canonical certificates (`canonical.pem`) to avoid build failures. From the Linux build tree, we executed:
+  ```bash
+  sudo scripts/config --disable SYSTEM_TRUSTED_KEYS
+  sudo scripts/config --disable SYSTEM_REVOCATION_KEYS
+  make olddefconfig
+  ```
+
+* Under **Processor type and features**, we fine-tuned the settings for our specific hardware architecture and saved the configuration.
+
+* Finally, we built and installed the kernel and its modules:
+  ```bash
+  sudo make -j13
+  sudo make modules_install
+  sudo make install
+  ```
+### Installing the Baseline (Non-RT) Kernel
+
+To establish a baseline for our performance comparison, we also required the standard, non-real-time Linux kernel version 6.12.89. For convenience and to streamline the deployment, we utilized the **Ubuntu Mainline Kernel Installer** graphical utility to fetch the necessary packages. 
+
+Once the packages were retrieved, we installed and loaded the new kernel by executing the following commands:
+
+```bash
+sudo add apt-repository ppa:cappelikan/ppa
+sudo apt update
+sudo apt install mainline
+```
+### KVM
+Being effectively treated as a Type-2 hypervisor, KVM sits on top of an already booted operating system. The host OS manages it similarly to a user-space application, where the virtual CPUs (vCPUs) are scheduled as standard host processes. Consequently, the installation process is as straightforward as running the following command:
+
+```bash
+sudo apt -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu-system qemu-kvm virt-manager
+```
+
+Once the installation was complete, we provisioned the guest Virtual Machine with the following hardware specifications:
+
+* **vCPUs:** 2
+* **RAM:** 4 GB
+* **Storage:** 25 GB virtual hard disk
+
+
+## XEN
