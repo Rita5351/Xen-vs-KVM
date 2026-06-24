@@ -96,22 +96,7 @@ To achieve true real-timeliness after installation, we must move beyond the defa
 * **RCU callback offloading (`rcu_nocbs`):** To further minimize latencies imposed by memory allocators in `softirq` contexts, apply RCU callback offloading to dedicated kernel threads using the `rcu_nocbs=` parameter.
 * **IRQ affinity:** Configure IRQ affinity to ensure hardware interrupts are kept away from our isolated cores as much as possible.
 
-#### Modifying the Bootloader (GRUB)
-
-Finally, we can test all these isolation mechanisms together by modifying the bootloader. 
-
-In our case, we decided to fully isolate **CPU22** and **CPU23** on our 24-core system, configuring GRUB by adding a custom boot entry in `/etc/grub.d/40_custom`:
-
-```text
-menuentry 'Ubuntu 24.04 (6.12.89-rt18-full)'{
-        echo 'Loading Linux 6.12.89-rt18 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on [22, 23]'
-        linux   /boot/vmlinuz-6.12.89-rt18 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=22-23 isolcpus=22-23 rcu_nocbs=22-23 irqaffinity=0-21 quiet splash $vt_handoff
-        echo    'Loading initial ramdisk ...'
-        initrd  /boot/initrd.img-6.12.89-rt18
-}
- ```
-
-### KVM
+## KVM
 Being effectively treated as a Type-2 hypervisor, KVM sits on top of an already booted operating system. The host OS manages it similarly to a user-space application, where the virtual CPUs (vCPUs) are scheduled as standard host processes. Consequently, the installation process is as straightforward as running the following command:
 
 ```bash
@@ -124,5 +109,59 @@ Once the installation was complete, we provisioned the guest Virtual Machine wit
 * **RAM:** 4 GB
 * **Storage:** 25 GB virtual hard disk
 
+We installed both the 6.12.89 and the 6.12.89-rt18 kernels in the same manner as on the host, with the exception that we did not enable the NVMe block device support, since we will be using VirtIO.
+
+### Modifying the Bootloader (GRUB)
+
+On the host, we fully isolated **CPU22** and **CPU23** on our 24-core system, configuring GRUB by adding a custom boot entry in `/etc/grub.d/40_custom`:
+
+```text
+menuentry 'Ubuntu 24.04 (6.12.89-rt18-full)'{
+        echo 'Loading Linux 6.12.89-rt18 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on [22, 23]'
+        linux   /boot/vmlinuz-6.12.89-rt18 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=22-23 isolcpus=22-23 rcu_nocbs=22-23 irqaffinity=0-21 quiet splash $vt_handoff
+        echo    'Loading initial ramdisk ...'
+        initrd  /boot/initrd.img-6.12.89-rt18
+}
+ ```
+
+Similarly, on the guest we isolated **CPU1** with the following configuration:
+
+```text
+menuentry 'Ubuntu 24.04 (6.12.89-rt18-full)'{
+        echo 'Loading Linux 6.12.89-rt18 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on 1'
+        linux   /boot/vmlinuz-6.12.89-rt18 root=UUID=1fe78ac9-040a-4fe5-b3a8-8715d38d692e ro  nohz_full=1 isolcpus=1 rcu_nocbs=1 irqaffinity=0 quiet splash $vt_handoff
+        echo    'Loading initial ramdisk ...'
+        initrd  /boot/initrd.img-6.12.89-rt18
+}
+ ```
+
+### Tweaking the VM
+Furthermore, we appended specific parameters to the XML configuration to ensure stable and predictable VM behaviour:
+
+1. We applied CPU pinning to make the vCPU threads only run on the isolated cores, while banishing emulator and I/O threads to the general-purpose cores:
+
+   ```xml
+    <vcpu placement='static'>2</vcpu>
+    <cputune>
+      <vcpupin vcpu='0' cpuset='22'/>
+      <vcpupin vcpu='1' cpuset='23'/> 
+      <emulatorpin cpuset='0-21'/>
+      <iothreadpin iothread='1' cpuset='0-21'/>
+    </cputune>
+   ```
+
+2. We enabled memory locking to prevent swapping:
+   ```xml
+    <memoryBacking>
+      <locked/>
+    </memoryBacking>
+   ```
+
+3. We ensured CPU pass-through and correct topology mapping:
+   ```xml
+    <cpu mode='host-passthrough' check='none'>
+      <topology sockets='1' dies='1' cores='2' threads='1'/>
+    </cpu>
+   ```
 
 ## XEN
