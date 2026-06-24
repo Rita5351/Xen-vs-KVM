@@ -3,6 +3,18 @@ This chapter outlines the complete experimental testbed configuration required t
 
 The following sections detail the step-by-step preparation of the system, starting with the installation and tuning of the host operating system, the compilation of a fully preemptible Linux kernel (`PREEMPT_RT`), and the deployment of the respective hypervisors. We then detail both hypervisors' configuration, focusing on the differences between the two.
 
+### Installing the Baseline (Non-RT) Kernel
+
+To establish a baseline for our performance comparison, we also required the standard, non-real-time Linux kernel version 6.12.89. For convenience and to streamline the deployment, we utilized the **Ubuntu Mainline Kernel Installer** graphical utility to fetch the necessary packages. 
+
+Once the packages were retrieved, we installed and loaded the new kernel by executing the following commands:
+
+```bash
+sudo add apt-repository ppa:cappelikan/ppa
+sudo apt update
+sudo apt install mainline
+```
+
 ## Patching Linux with PREEMPT_RT
 
 * First, we downloaded the official kernel source code from the [Linux Kernel Archive](https://cdn.kernel.org/pub/linux/kernel/).
@@ -49,6 +61,8 @@ The following sections detail the step-by-step preparation of the system, starti
 * We opened the configuration menu again (`make xconfig`) to manually disable specific features to reduce latency, strictly in the following order:
   * `CONFIG_SCHED_MC_PRIO` (**Processor type and features** -> **Multi-core scheduler support**)
   * `CONFIG_CPU_FREQ` (**Power management and ACPI options** -> **CPU Frequency scaling**)
+  * `CONFIG_STACKPROTECTOR` 
+  * `CONFIG_APM` 
   * `CONFIG_ACPI_PROCESSOR` (**Power management and ACPI options** -> **ACPI (Advanced Configuration and Power Interface)**)
   * `CONFIG_CPU_IDLE` (**Power management and ACPI options** -> **CPU idle PM support**)
   * **Simultaneous Multi-threading** (if supported by the hardware)
@@ -67,21 +81,36 @@ The following sections detail the step-by-step preparation of the system, starti
 
 * Finally, we built and installed the kernel and its modules:
   ```bash
-  sudo make -j13
+  sudo make -j25
   sudo make modules_install
   sudo make install
   ```
-### Installing the Baseline (Non-RT) Kernel
+### Achieving True Real-Timeliness
 
-To establish a baseline for our performance comparison, we also required the standard, non-real-time Linux kernel version 6.12.89. For convenience and to streamline the deployment, we utilized the **Ubuntu Mainline Kernel Installer** graphical utility to fetch the necessary packages. 
+To achieve true real-timeliness after installation, we must move beyond the default `PREEMPT_DYNAMIC` schema. While `PREEMPT_DYNAMIC` allows the kernel to dynamically determine preemption modes (e.g., *none*, *voluntary*, or *full*), it is not designed for real-time workloads and lacks hard guarantees for interrupt latency and thread scheduling.
 
-Once the packages were retrieved, we installed and loaded the new kernel by executing the following commands:
+#### Isolation and Configuration Steps
 
-```bash
-sudo add apt-repository ppa:cappelikan/ppa
-sudo apt update
-sudo apt install mainline
-```
+* **Kernel scheduling isolation (`isolcpus`):** Use the `isolcpus=` boot parameter to prevent the scheduler from assigning tasks to a specific set of CPUs, thereby avoiding general SMP balancing.
+* **Kernel house-keeping noise (`nohz_full`):** Address kernel house-keeping noise by appending `nohz_full=` to enable Tickless Mode, which reduces OS overhead on those selected CPUs.
+* **RCU callback offloading (`rcu_nocbs`):** To further minimize latencies imposed by memory allocators in `softirq` contexts, apply RCU callback offloading to dedicated kernel threads using the `rcu_nocbs=` parameter.
+* **IRQ affinity:** Configure IRQ affinity to ensure hardware interrupts are kept away from our isolated cores as much as possible.
+
+#### Modifying the Bootloader (GRUB)
+
+Finally, we can test all these isolation mechanisms together by modifying the bootloader. 
+
+In our case, we decided to fully isolate **CPU22** and **CPU23** on our 24-core system, configuring GRUB by adding a custom boot entry in `/etc/grub.d/40_custom`:
+
+```text
+menuentry 'Ubuntu 24.04 (6.12.89-rt18-full)'{
+        echo 'Loading Linux 6.12.89-rt18 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on [22, 23]'
+        linux   /boot/vmlinuz-6.12.89-rt18 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=22-23 isolcpus=22-23 rcu_nocbs=22-23 irqaffinity=0-21 quiet splash $vt_handoff
+        echo    'Loading initial ramdisk ...'
+        initrd  /boot/initrd.img-6.12.89-rt18
+}
+ ```
+
 ### KVM
 Being effectively treated as a Type-2 hypervisor, KVM sits on top of an already booted operating system. The host OS manages it similarly to a user-space application, where the virtual CPUs (vCPUs) are scheduled as standard host processes. Consequently, the installation process is as straightforward as running the following command:
 
