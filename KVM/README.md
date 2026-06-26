@@ -73,10 +73,11 @@ if [ "$CURRENT_RUN" -lt "$MAX_RUNS" ]; then
     # Increment counter for the current iteration
     NEXT_RUN=$((CURRENT_RUN + 1))
     echo "$NEXT_RUN" > "$COUNT_FILE"
+    sleep 30
 
     # Execute cyclictest with Real-Time priority (Modify parameters if necessary)
     # Example parameters: -t1 (1 thread), -p 99 (max RT priority), -n (clock_nanosleep), -D 1m (duration 1 minute)
-    cyclictest -t1 -p 99 -n -i 10000 -m -D 1m > "$LOG_DIR/result_${NEXT_RUN}.txt"
+    sudo cyclictest --mlockall --priority=90 --threads=1 --affinity=1 --interval=50 --duration 1m -H 100 --histfile="$LOG_DIR/results_hit_${NEXT_RUN}.log" > "$LOG_DIR/result_${NEXT_RUN}.txt"
 
     # Force reboot for the next cycle
     reboot
@@ -149,14 +150,13 @@ sudo reboot
 
 At the end of the thirtieth cycle, the incremental logs will be available in `/var/log/cyclictest_results/` and the system will remain stably booted on the set kernel, awaiting interaction.
 
-## NON-REAL-TIME KERNEL
-
-## KERNEL NON REAL TIME
-
-## MODIFICHE HW
-Vado in overclocking \Advanced cpu \ AMD OVERCLOCKING \PRECISION BOOST OVERDRIVE DISABLED
-
-Vado in overclocking \Advanced cpu\ AMD CBS e disattiviamo core performance boost e global C-state Control
+## NO-REAL-TIME KERNEL AND NO REAL-TIME VM
 
 
-Vado in Overclocking e metto CPU RATIO 44.00 invece di Auto 
+## NO REAL-TIME KERNEL AND REAL TIME VM
+
+## REAL-TIME KERNEL AND NO REAL-TIME VM
+
+## REAL-TIME KERNEL AND REAL TIME VM
+
+

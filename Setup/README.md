@@ -85,6 +85,18 @@ sudo apt install mainline
   sudo make modules_install
   sudo make install
   ```
+### Hardware Tuning (BIOS/UEFI)
+
+The configurations in this section are highly hardware-specific and will vary depending on the motherboard manufacturer and CPU vendor. To ensure predictable performance and minimize latency spikes for real-time workloads, it is crucial to disable dynamic frequency scaling and deep power-saving states directly at the firmware level. 
+
+Below are the specific configuration steps applied to our testbed, which features an MSI motherboard and an AMD processor:
+
+* **Disable Precision Boost Overdrive (PBO):** Navigate to `Overclocking` -> `Advanced CPU Configuration` -> `AMD Overclocking` and set **Precision Boost Overdrive** to **Disabled**.
+
+* **Disable CPU Boost and Sleep States:** Navigate to `Overclocking` -> `Advanced CPU Configuration` -> `AMD CBS` and set both **Core Performance Boost** and **Global C-state Control** to **Disabled**.
+
+* **Set a Fixed CPU Frequency:** In the main `Overclocking` menu, change the **CPU Ratio** from `Auto` to a fixed value of **44.00**. This forces the processor to run at a constant clock speed, preventing the latency overhead associated with dynamic frequency transitions during the experiments.
+
 ### Achieving True Real-Timeliness
 
 To achieve true real-timeliness after installation, we must move beyond the default `PREEMPT_DYNAMIC` schema. While `PREEMPT_DYNAMIC` allows the kernel to dynamically determine preemption modes (e.g., *none*, *voluntary*, or *full*), it is not designed for real-time workloads and lacks hard guarantees for interrupt latency and thread scheduling.
