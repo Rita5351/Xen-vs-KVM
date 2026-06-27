@@ -177,3 +177,9 @@ Furthermore, we appended specific parameters to the XML configuration to ensure 
    ```
 
 ## XEN
+Abbiamo installato Xen attraverso XEN-HYPERVISOR-AMD64.
+Questo aggiunge delle voci nel menù di avvio di GRUB per avviare ubuntu come dom0 usando Xen.
+Dato che l'interfaccia grafica non è disponibile (anche su hw differenti non cambia), è stato necessario riconfigurare un demone SSH sull'host. Abbiamo eseguito il comando
+sudo apt install openssh - server 
+Abbiamo poi modificato il file di configurazione per accettare connessioni dalla rete locale.
+Al seguito del restart, avvio su xen e 
