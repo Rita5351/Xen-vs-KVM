@@ -77,7 +77,7 @@ if [ "$CURRENT_RUN" -lt "$MAX_RUNS" ]; then
 
     # Execute cyclictest with Real-Time priority (Modify parameters if necessary)
     # Example parameters: -t1 (1 thread), -p 99 (max RT priority), -n (clock_nanosleep), -D 1m (duration 1 minute)
-    sudo cyclictest --mlockall --priority=90 --threads=1 --affinity=1 --interval=50 --duration 1m -H 100 --histfile="$LOG_DIR/results_hit_${NEXT_RUN}.log" > "$LOG_DIR/result_${NEXT_RUN}.txt"
+    sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 1m -H 1000 --histfile="$LOG_DIR/results_hit_${NEXT_RUN}.log"
 
     # Force reboot for the next cycle
     reboot

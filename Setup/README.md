@@ -5,7 +5,7 @@ The following sections detail the step-by-step preparation of the system, starti
 
 ### Installing the Baseline (Non-RT) Kernel
 
-To establish a baseline for our performance comparison, we also required the standard, non-real-time Linux kernel version 6.12.89. For convenience and to streamline the deployment, we utilized the **Ubuntu Mainline Kernel Installer** graphical utility to fetch the necessary packages. 
+To establish a baseline for our performance comparison, we also required the standard, non-real-time Linux kernel version 6.18.35. For convenience and to streamline the deployment, we utilized the **Ubuntu Mainline Kernel Installer** graphical utility to fetch the necessary packages. 
 
 Once the packages were retrieved, we installed and loaded the new kernel by executing the following commands:
 
@@ -20,7 +20,7 @@ sudo apt install mainline
 * First, we downloaded the official kernel source code from the [Linux Kernel Archive](https://cdn.kernel.org/pub/linux/kernel/).
 * We extracted the archive using the following command:
   ```bash
-  tar -xzvf ~/Downloads/linux-6.12.89.tar.gz -C ~/
+  tar -xzvf ~/Downloads/linux-6.18.35.tar.gz -C ~/
   ```
 
 * Next, we installed the necessary dependencies to build the kernel:
@@ -30,7 +30,7 @@ sudo apt install mainline
 
 * We navigated into the Linux build tree and copied the configuration file from the currently running system:
   ```bash
-  cd ~/linux-6.12.89
+  cd ~/linux-6.18.35
   cp /boot/config-$(uname -r) .config
   ```
 
@@ -41,13 +41,13 @@ sudo apt install mainline
 
 * Subsequently, we downloaded the matching PREEMPT_RT patch from the [Linux Foundation Real-Time Wiki](https://wiki.linuxfoundation.org/realtime/start) and extracted it:
   ```bash
-  gunzip -c ~/Downloads/patch-6.12.89-rt18.patch.gz > ~/patch-6.12.89-rt18.patch
+  gunzip -c ~/Downloads/patch-6.18.35-rt5.patch.gz > ~/patch-6.18.35-rt5.patch
   ```
 
 * Returning to the build tree, we applied the patch and opened the configuration GUI:
   ```bash
-  cd ~/linux-6.12.89
-  patch -p1 < ../patch-6.12.89-rt18.patch
+  cd ~/linux-6.18.35
+  patch -p1 < ../patch-6.18.35-rt5.patch
   make xconfig
   ```
 
@@ -121,29 +121,29 @@ Once the installation was complete, we provisioned the guest Virtual Machine wit
 * **RAM:** 4 GB
 * **Storage:** 25 GB virtual hard disk
 
-We installed both the 6.12.89 and the 6.12.89-rt18 kernels in the same manner as on the host, with the exception that we did not enable the NVMe block device support, since we will be using VirtIO.
+We installed both the 6.18.35 and the 6.18.35-rt5 kernels in the same manner as on the host, with the exception that we did not enable the NVMe block device support, since we will be using VirtIO.
 
 ### Modifying the Bootloader (GRUB)
 
 On the host, we fully isolated **CPU22** and **CPU23** on our 24-core system, configuring GRUB by adding a custom boot entry in `/etc/grub.d/40_custom`:
 
 ```text
-menuentry 'Ubuntu 24.04 (6.12.89-rt18-full)'{
-        echo 'Loading Linux 6.12.89-rt18 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on [22, 23]'
-        linux   /boot/vmlinuz-6.12.89-rt18 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=22-23 isolcpus=22-23 rcu_nocbs=22-23 irqaffinity=0-21 quiet splash $vt_handoff
+menuentry 'Ubuntu 24.04 (6.18.35-rt5-full)'{
+        echo 'Loading Linux 6.18.35-rt5 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on [22, 23]'
+        linux   /boot/vmlinuz-6.18.35-rt5 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=22-23 isolcpus=22-23 rcu_nocbs=22-23 irqaffinity=0-21 quiet splash $vt_handoff
         echo    'Loading initial ramdisk ...'
-        initrd  /boot/initrd.img-6.12.89-rt18
+        initrd  /boot/initrd.img-6.18.35-rt5
 }
  ```
 
 Similarly, on the guest we isolated **CPU1** with the following configuration:
 
 ```text
-menuentry 'Ubuntu 24.04 (6.12.89-rt18-full)'{
-        echo 'Loading Linux 6.12.89-rt18 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on 1'
-        linux   /boot/vmlinuz-6.12.89-rt18 root=UUID=1fe78ac9-040a-4fe5-b3a8-8715d38d692e ro  nohz_full=1 isolcpus=1 rcu_nocbs=1 irqaffinity=0 quiet splash $vt_handoff
+menuentry 'Ubuntu 24.04 (6.18.35-rt5-full)'{
+        echo 'Loading Linux 6.18.35-rt5 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on 1'
+        linux   /boot/vmlinuz-6.18.35-rt5 root=UUID=1fe78ac9-040a-4fe5-b3a8-8715d38d692e ro  nohz_full=1 isolcpus=1 rcu_nocbs=1 irqaffinity=0 quiet splash $vt_handoff
         echo    'Loading initial ramdisk ...'
-        initrd  /boot/initrd.img-6.12.89-rt18
+        initrd  /boot/initrd.img-6.18.35-rt5
 }
  ```
 
@@ -176,10 +176,74 @@ Furthermore, we appended specific parameters to the XML configuration to ensure 
     </cpu>
    ```
 
-## XEN
-Abbiamo installato Xen attraverso XEN-HYPERVISOR-AMD64.
-Questo aggiunge delle voci nel menù di avvio di GRUB per avviare ubuntu come dom0 usando Xen.
-Dato che l'interfaccia grafica non è disponibile (anche su hw differenti non cambia), è stato necessario riconfigurare un demone SSH sull'host. Abbiamo eseguito il comando
-sudo apt install openssh - server 
-Abbiamo poi modificato il file di configurazione per accettare connessioni dalla rete locale.
-Al seguito del restart, avvio su xen e 
+## Xen
+
+### Installation and GUI Troubleshooting
+
+We installed the Xen hypervisor via the `xen-hypervisor-amd64` package. This process automatically generated the necessary GRUB bootloader entries to boot the Ubuntu system as **Dom0** (the privileged management domain). 
+
+During our initial boot tests, we encountered severe instability with the Graphical User Interface (GUI). Specifically, the `nouveau` open-source drivers—often relied upon for NVIDIA GPU compatibility—failed to initialize correctly on our testbed. Further investigation suggested that graphical drivers generally exhibit poor stability when running under Xen Dom0, a behavior observed across different hardware configurations. 
+
+To bypass this limitation, we opted for a headless setup and managed the host via SSH. We installed the SSH daemon:
+
+```bash
+sudo apt install openssh-server
+```
+
+After modifying the configuration file to accept incoming connections from the local network, we rebooted into the Xen environment and successfully established a remote SSH session. We verified that the hypervisor was functioning correctly by checking its status:
+
+```bash
+sudo xl info
+```
+The output successfully confirmed the Xen hypervisor was active and managing the host.
+
+### Storage Provisioning and Tooling
+
+To streamline the provisioning of subsequent **DomU** (guest) virtual machines, we installed the `xen-tools` package. 
+
+Since our guests required dedicated block storage, we resized the existing LVM (Logical Volume Manager) partition hosting the Ubuntu installation to carve out a new logical volume exclusively dedicated to the VMs. We performed this using the following steps:
+
+```bash
+# [INSERISCI QUI I COMANDI PER IL RIDIMENSIONAMENTO LVM]
+```
+
+### Dom0 Resource Tuning
+
+Before deploying the guests, it is necessary to partition the hardware resources, which are assigned to Dom0 by default. This ensures that dedicated, isolated resources are available for the DomUs. We reduced the Dom0 footprint using the following commands:
+
+```bash
+# [INSERISCI QUI I COMANDI PER LA RIDUZIONE DELLE RISORSE DI DOM0]
+```
+
+### DomU Configuration and Deployment
+
+We designed two distinct configuration files to provision our DomU instances. These guests are configured with the exact same hardware specifications (vCPUs, RAM, Storage) as the KVM virtual machines to guarantee a fair comparison. The only difference between the two configurations is the underlying kernel used to boot them.
+
+The base configuration file is structured as follows:
+
+```text
+# [INSERISCI QUI IL CONTENUTO DEL FILE DI CONFIGURAZIONE DEL DOMU]
+```
+
+Finally, we instantiated the virtual machine by passing the configuration file to the Xen toolstack:
+
+```bash
+# [INSERISCI QUI IL COMANDO PER CREARE LA VM, es. sudo xl create <nome_file.cfg>]
+```
+### Problems with PREEMPT_RT
+
+During the initial setup phase, we attempted to boot Xen using the same real-time kernel—compiled with the previously described instructions—as the Dom0 kernel. We tested various kernel versions across different Linux distributions and experimented with several combinations of the tuning parameters mentioned earlier (specifically: `CONFIG_SCHED_MC_PRIO`, `CONFIG_CPU_FREQ`, `CONFIG_STACKPROTECTOR`, `CONFIG_APM`, `CONFIG_ACPI_PROCESSOR`, and `CONFIG_CPU_IDLE`). 
+
+Furthermore, we applied a wide array of Xen and kernel command-line boot parameters that are traditionally recommended for resolving boot hangs and hardware initialization issues. However, none of these mitigations proved successful.
+
+We also ensured that all the necessary configuration flags required to run the kernel as a Xen Dom0 were strictly enabled:
+
+```bash
+# [INSERISCI QUI LA LISTA DEI FLAG XEN DOM0]
+```
+
+Despite these extensive troubleshooting efforts, we observed that enabling the "Fully Preemptible Kernel (RT)" option consistently caused severe boot incompatibilities with the Xen hypervisor. The boot sequence systematically stalled even before the initialization of the logging daemons (such as `systemd-journald`). 
+
+Coupled with the graphical driver issues discussed previously, debugging this behavior proved to be a formidable challenge. The system most likely dropped into an `initramfs` recovery shell, which remained completely inaccessible to us in our headless setup. 
+
+Consequently, we decided to leave the "Fully Preemptible Kernel" option disabled for the Dom0 kernel. Instead, we opted for the "Low-Latency" scheduling model, which guaranteed a reliable boot process while still offering better responsiveness compared to the standard generic kernel.
