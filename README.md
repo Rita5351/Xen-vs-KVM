@@ -41,13 +41,12 @@ The experimental analyses of Abeni and Faggioli (2019, 2020) serve as a methodol
 ## Tasks and Methodology
 
 ### 1. Baseline Campaign and Reproduction
-* **Setup:** Configured Xen and KVM on the same host with a single Linux guest configuration (vCPUs, memory, `PREEMPT_RT` kernel; HVM for Xen initially).
-* **Reproduction:** Replicated key experiments from Abeni & Faggioli (2019, 2020):
+* **Setup:** Configured Xen and KVM on the same host with a single Linux guest configuration (vCPUs, memory, `PREEMPT_RT` kernel; HVM for Xen initially) as shown on [here](Setup/README.md).
+* **Reproduction:** Replicated key experiments from Abeni & Faggioli ([KVM](KVM/README.md), [Xen](Xen/README.md)) :
   * Executed `cyclictest` in the guest with various host/guest kernel combinations, both with and without a background stress workload (`stress-ng`) in Dom0 / KVM host.
   * Evaluated the effect of the QEMU Device Model priority on Xen HVM (priority-inversion experiment).
   * Analyzed the effect of the Xen scheduler choice (using `null` vs default `Credit` scheduler).
 * **Extension:** Ran **TACLe Benchmarks** in a "critical" guest alongside `stress-ng` in a co-located "noisy" guest. 
-* **Isolation:** Applied and visualized the effects of vCPU pinning, `isolcpus`, and IRQ steering.
 
 ### 2. Guest-type Comparison
 * Extended the Xen study to all three guest types: **HVM, PV, and PVH** to measure their dramatic effects on latency.

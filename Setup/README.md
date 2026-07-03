@@ -3,19 +3,9 @@ This chapter outlines the complete experimental testbed configuration required t
 
 The following sections detail the step-by-step preparation of the system, starting with the installation and tuning of the host operating system, the compilation of a fully preemptible Linux kernel (`PREEMPT_RT`), and the deployment of the respective hypervisors. We then detail both hypervisors' configuration, focusing on the differences between the two.
 
-### Installing the Baseline (Non-RT) Kernel
+## Kernel configuration
 
-To establish a baseline for our performance comparison, we also required the standard, non-real-time Linux kernel version 6.18.35. For convenience and to streamline the deployment, we utilized the **Ubuntu Mainline Kernel Installer** graphical utility to fetch the necessary packages. 
-
-Once the packages were retrieved, we installed and loaded the new kernel by executing the following commands:
-
-```bash
-sudo add apt-repository ppa:cappelikan/ppa
-sudo apt update
-sudo apt install mainline
-```
-
-## Patching Linux with PREEMPT_RT
+To establish a baseline for our performance comparison, we also required the standard, non-real-time Linux kernel version 6.18.35. 
 
 * First, we downloaded the official kernel source code from the [Linux Kernel Archive](https://cdn.kernel.org/pub/linux/kernel/).
 * We extracted the archive using the following command:
@@ -39,7 +29,15 @@ sudo apt install mainline
   make olddefconfig
   ```
 
-* Subsequently, we downloaded the matching PREEMPT_RT patch from the [Linux Foundation Real-Time Wiki](https://wiki.linuxfoundation.org/realtime/start) and extracted it:
+* To streamline the build by compiling only the currently loaded modules, we ran:
+  ```bash
+  make localmodconfig
+  ```
+
+### Patching Linux with PREEMPT_RT
+For the Real-Time kernel, we needed to follow some additional steps:
+
+* We downloaded the matching PREEMPT_RT patch from the [Linux Foundation Real-Time Wiki](https://wiki.linuxfoundation.org/realtime/start) and extracted it:
   ```bash
   gunzip -c ~/Downloads/patch-6.18.35-rt5.patch.gz > ~/patch-6.18.35-rt5.patch
   ```
@@ -53,10 +51,6 @@ sudo apt install mainline
 
 * In the configuration menu, we navigated to General Setup -> Preemption Model and set it to Fully Preemptible Kernel (RT).
 
-* To streamline the build by compiling only the currently loaded modules, we ran:
-  ```bash
-  make localmodconfig
-  ```
 
 * We opened the configuration menu again (`make xconfig`) to manually disable specific features to reduce latency, strictly in the following order:
   * `CONFIG_SCHED_MC_PRIO` (**Processor type and features** -> **Multi-core scheduler support**)
@@ -70,14 +64,16 @@ sudo apt install mainline
 * We also ensured NVMe support was enabled:
   * `CONFIG_BLK_DEV_NVME` (**Device Drivers** -> **NVME Support** -> **NVM Express block device**)
 
+* Under **Processor type and features**, we fine-tuned the settings for our specific hardware architecture and saved the configuration.
+
+### Compiling the kernel 
+
 * For Ubuntu specifically, it is necessary to clear the Canonical certificates (`canonical.pem`) to avoid build failures. From the Linux build tree, we executed:
   ```bash
   sudo scripts/config --disable SYSTEM_TRUSTED_KEYS
   sudo scripts/config --disable SYSTEM_REVOCATION_KEYS
   make olddefconfig
   ```
-
-* Under **Processor type and features**, we fine-tuned the settings for our specific hardware architecture and saved the configuration.
 
 * Finally, we built and installed the kernel and its modules:
   ```bash

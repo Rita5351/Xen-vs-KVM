@@ -2,10 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-nrt_nrt = Path(r"~/Xen-vs-KVM/KVM/tests/NRT-NRT/results_30.log").expanduser()
-nrt_rt = Path(r"~/Xen-vs-KVM/KVM/tests/NRT-RT/results_30.log").expanduser()
-rt_nrt = Path(r"~/Xen-vs-KVM/KVM/tests/RT-NRT/results_30.log").expanduser()
-rt_rt = Path(r"~/Xen-vs-KVM/KVM/tests/RT-RT/results_30.log").expanduser()
+nrt_nrt = Path(r"~/Desktop/Xen-vs-KVM/KVM/tests/NRT-NRT/results_30.log").expanduser()
+nrt_rt = Path(r"~/Desktop/Xen-vs-KVM/KVM/tests/NRT-RT/results_30.log").expanduser()
+rt_nrt = Path(r"~/Desktop/Xen-vs-KVM/KVM/tests/RT-NRT/results_30.log").expanduser()
+rt_rt = Path(r"~/Desktop/Xen-vs-KVM/KVM/tests/RT-RT/results_30.log").expanduser()
 
 data_nrt_nrt = np.genfromtxt(nrt_nrt, comments='#')
 data_nrt_rt = np.genfromtxt(nrt_rt, comments='#')
