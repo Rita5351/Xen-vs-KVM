@@ -1,0 +1,4 @@
+Max latency for NRT-NRT: 1221
+Max latency for NRT-RT: 1967
+Max latency for RT-NRT: 223
+Max latency for RT-RT: 111
