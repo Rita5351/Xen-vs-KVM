@@ -1,0 +1,2 @@
+# Xen
+This documentation describes the detailed procedure to configure an automated test cycle at the boot of the virtual machine. The system allows forcing the boot with a specific kernel via GRUB, running `cyclictest` for a preset number of iterations (30 cycles), and automatically rebooting the machine at the end of each session, disabling the cycle once completed.

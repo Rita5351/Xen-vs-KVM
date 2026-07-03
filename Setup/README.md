@@ -214,11 +214,7 @@ sudo tune2fs -U random /dev/ubuntu-vg/ubuntu-24.04-domU
 
 ### Dom0 Resource Tuning
 
-Before deploying the guests, it is necessary to partition the hardware resources, which are assigned to Dom0 by default. This ensures that dedicated, isolated resources are available for the DomUs. We reduced the Dom0 footprint using the following commands:
-
-```bash
-# [INSERISCI QUI I COMANDI PER LA RIDUZIONE DELLE RISORSE DI DOM0]
-```
+Before deploying the guests, it is necessary to partition the hardware resources, which are assigned to Dom0 by default. This ensures that dedicated, isolated resources are available for the DomUs. We reduced the Dom0 footprint using the following commands shown [here](Xen/README.md)
 
 ### DomU Configuration and Deployment
 
