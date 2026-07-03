@@ -200,7 +200,16 @@ To streamline the provisioning of subsequent **DomU** (guest) virtual machines, 
 Since our guests required dedicated block storage, we resized the existing LVM (Logical Volume Manager) partition hosting the Ubuntu installation to carve out a new logical volume exclusively dedicated to the VMs. We performed this using the following steps:
 
 ```bash
-# [INSERISCI QUI I COMANDI PER IL RIDIMENSIONAMENTO LVM]
+sudo lvreduce --resizefs --size -65G /dev/ubuntu-vg/root
+sudo lvcreate -L 65G -n ubuntu-24.04-domU ubuntu-vg
+```
+
+To speed up the setup of the DomU, we decided to clone the Dom0 partition and assign it a new UUID:
+
+```bash
+sudo dd if=/dev/nvme0n1p4 of=/dev/ubuntu-vg/ubuntu-24.04-domU status=progress
+sudo e2fsck -f /dev/ubuntu-vg/ubuntu-24.04-domU
+sudo tune2fs -U random /dev/ubuntu-vg/ubuntu-24.04-domU
 ```
 
 ### Dom0 Resource Tuning
@@ -217,14 +226,41 @@ We designed two distinct configuration files to provision our DomU instances. Th
 
 The base configuration file is structured as follows:
 
-```text
-# [INSERISCI QUI IL CONTENUTO DEL FILE DI CONFIGURAZIONE DEL DOMU]
+```conf
+# This configures either a HVM, a PVH or a PV guest
+type = "hvm"
+
+# Guest name
+name = "ubuntu-24.04-linux-6.18.35-rt5"
+
+# Kernel image to boot
+kernel = "/boot/vmlinuz-6.18.35-rt5"
+
+# Ramdisk (optional)
+ramdisk = "/boot/initrd.img-6.18.35-rt5"
+
+# Kernel command line options (to show output on console)
+extra = "root=/dev/xvda console=hvc0"
+
+# Initial memory allocation (4GB)
+memory = 4096
+maxmem = 4096
+
+# Number of VCPUS (2)
+vcpus = 2
+maxvcpus = 2
+
+# Network devices
+vif = [ 'bridge=xenbr0' ]
+
+# Disk Devices
+disk = [ '/dev/ubuntu-vg/ubuntu-24.04-domU,raw,xvda,rw' ]
 ```
 
 Finally, we instantiated the virtual machine by passing the configuration file to the Xen toolstack:
 
 ```bash
-# [INSERISCI QUI IL COMANDO PER CREARE LA VM, es. sudo xl create <nome_file.cfg>]
+sudo xl create -c ubuntu-24.04-linux-6.18.35-rt5-hvm.conf
 ```
 ### Problems with PREEMPT_RT
 
@@ -232,11 +268,16 @@ During the initial setup phase, we attempted to boot Xen using the same real-tim
 
 Furthermore, we applied a wide array of Xen and kernel command-line boot parameters that are traditionally recommended for resolving boot hangs and hardware initialization issues. However, none of these mitigations proved successful.
 
-We also ensured that all the necessary configuration flags required to run the kernel as a Xen Dom0 were strictly enabled:
+We also ensured that all the necessary configuration flags required to run the kernel as a Xen Dom0 were strictly enabled. We tried:
 
-```bash
-# [INSERISCI QUI LA LISTA DEI FLAG XEN DOM0]
-```
+* `swiotlb=35536,force`
+* `iommu=pt`
+* `console=hvc0`
+* `console=tty0`
+* `earlyprintk=ken`
+* `apci=off noapic pci=nomsi`
+* `noirqbalance`
+* `nomodeset`
 
 Despite these extensive troubleshooting efforts, we observed that enabling the "Fully Preemptible Kernel (RT)" option consistently caused severe boot incompatibilities with the Xen hypervisor. The boot sequence systematically stalled even before the initialization of the logging daemons (such as `systemd-journald`). 
 
