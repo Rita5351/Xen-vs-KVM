@@ -151,75 +151,62 @@ sudo reboot
 At the end of the thirtieth cycle, the incremental logs will be available in `/var/log/cyclictest_results/` and the system will remain stably booted on the set kernel, awaiting interaction.
 
 ## NO-REAL-TIME KERNEL AND NO REAL-TIME VM
-This section presents an analysis of 30 consecutive `cyclictest` runs conducted in a standard environment, featuring a Non-Real-Time Linux kernel hosted on a Non-Real-Time Virtual Machine. The objective is to establish a performance baseline and assess system determinism in the absence of real-time optimizations, such as the PREEMPT_RT patch or a real-time tuned hypervisor.
+
+This section presents an analysis of a single, extended 5-minute `cyclictest` run conducted in a standard environment, featuring a Non-Real-Time Linux kernel hosted on a Non-Real-Time Virtual Machine. The objective is to establish a performance baseline and assess system determinism in the absence of real-time optimizations, such as the `PREEMPT_RT` patch or a real-time tuned hypervisor.
 
 ### Distribution Analysis and Nominal Performance
-Analysis of the histogram logs across all 30 test runs reveals significant consistency during nominal execution. In every measurement, the statistical mode (the most frequent latency value) remained firmly anchored at 8 µs. For instance, the final iteration (Run 30) recorded the 8 µs latency 887,458 times. Average latencies were equally stable, consistently measuring 8 µs across the majority of the analyzed runs, including runs 2, 12, 15, and 30. This performance indicates that under nominal conditions, without background load or anomalous preemption, the overhead introduced by the default virtualization layer and host kernel scheduler is remarkably low.
+Analysis of the histogram log reveals significant consistency during nominal execution over the 5-minute test period. The statistical mode (the most frequent latency value) was anchored firmly at 6 µs. The average latency was equally stable, measuring exactly 7 µs across the entire continuous execution. Additionally, the minimum recorded latency was extremely low, bottoming out at 5 µs. This performance indicates that under nominal conditions, without background load or anomalous preemption, the baseline overhead introduced by the default virtualization layer and host kernel scheduler is remarkably low.
 
 ### Worst-Case Execution Time (WCET) and Lack of Determinism
-The fundamental limitation of this configuration is revealed by the Worst-Case Execution Time (WCET) data, which shows high variability and unpredictable latency spikes. Across the 30 runs, maximum latencies varied significantly, ranging from a relative low of 290 µs in Run 12, to extreme values that exceeded the millisecond threshold, such as the 1180 µs spike observed in Run 15. Other runs confirmed this instability, exhibiting substantial peaks such as 742 µs in Run 2 and 681 µs in Run 30.
+The fundamental limitation of this general-purpose configuration is revealed by the Worst-Case Execution Time (WCET) data, which continues to demonstrate high variability and unpredictable latency spikes. Across the 5-minute continuous execution, the absolute maximum latency recorded was 602 µs, a severe, stochastic deviation from the average.
 
 ### Conclusions on Standard Environments
-These severe latency spikes—the "long tails" observed in the distribution logs—are characteristic of general-purpose software stacks. In this ecosystem, the hypervisor operates without real-time constraints and may preempt the Virtual CPU (VCPU) to serve host-level tasks; simultaneously, the guest kernel is subject to non-preemptible critical sections and non-deferrable hardware interrupts. Consequently, while nominal and average performance metrics are excellent, the Non-RT kernel on a Non-RT VM environment cannot guarantee the rigid, reliable upper bounds required for safety-critical control applications.
+These latency spikes—the "long tails" observed in the distribution logs—are characteristic of general-purpose software stacks. In this ecosystem, the hypervisor operates without strict real-time constraints and may preempt the Virtual CPU (VCPU) to serve host-level tasks; simultaneously, the guest kernel is subject to non-preemptible critical sections and non-deferrable hardware interrupts. Consequently, while nominal and average performance metrics are excellent, the Non-RT kernel on a Non-RT VM environment is susceptible to unpredictable delays and cannot guarantee the rigid, reliable upper bounds required for safety-critical control applications.
 
 ## NO REAL-TIME KERNEL AND REAL TIME VM
 
-This section analyzes the overall results obtained from 30 executions of the `cyclictest` tool in a hybrid environment, configured with a Standard Linux Kernel (Non-Real-Time) hosted on a Virtual Machine optimized for Real-Time. The goal of the analysis is to isolate latency responsibilities, verifying whether the use of a deterministic Hypervisor is sufficient to guarantee the respect of temporal constraints when the guest operating system remains general-purpose.
+This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a hybrid environment, configured with a Standard Linux Kernel (Non-Real-Time) hosted on a Virtual Machine optimized for Real-Time. The goal of this analysis is to verify whether the use of a deterministic Hypervisor is sufficient to guarantee strict temporal constraints during sustained workloads when the guest operating system remains general-purpose.
 
 ### Nominal Performance and Average Latency
-The data collected over the 30 runs confirm that optimization at the Hypervisor level guarantees excellent efficiency in the average case. The average latency values are extremely stable between 8 µs and 9 µs across all measurements. Furthermore, the absolute minimum latencies frequently drop down to 4 µs (as observed in Runs 23, 25, 27, and 29). This behavior indicates that the Real-Time VM allocates VCPU resources to the guest promptly and with minimal virtualization overhead.
+The data collected confirm that optimization at the Hypervisor level guarantees excellent efficiency in the average case. The average latency value is extremely stable, resting at 8 µs for the duration of the 5-minute test. Furthermore, the absolute minimum latency dropped down to 4 µs. This behavior indicates that the Real-Time VM allocates VCPU resources to the guest promptly and with minimal virtualization overhead under normal operating conditions.
 
 ### Worst-Case Execution Time (WCET) Analysis
-Despite the optimization of the underlying infrastructure, the analysis of the Worst-Case Execution Time (WCET) reveals a persistent lack of determinism. The recorded maximum latencies exhibit high variability. Although some tests contain the maximums to lower values (e.g., 376 µs in Run 15, 394 µs in Run 30, or 406 µs in Run 3), the majority of the samplings record severe peaks over 650 µs, often settling above 700 µs (e.g., Runs 10, 13, 22, 26, and 27). 
-
-The most critical issues are highlighted in Run 28, which reaches 912 µs, and particularly in Run 17, where the system records an isolated and extreme maximum peak of **1812 µs**.
+Despite the high baseline efficiency of the underlying infrastructure, the analysis of the Worst-Case Execution Time (WCET) reveals a severe lack of determinism under sustained testing. The recorded maximum latency reached an extreme peak of 6114 µs (over 6 milliseconds), and other 3 over-milliseconds spikes. This data indicates that while the system performs well nominally, it is subject to rare but catastrophic scheduling delays that shatter any real-time guarantees.
 
 ### Conclusions on the Hybrid Environment
-The empirical observation of these 30 runs demonstrates that the exclusive optimization of the virtualization infrastructure (Hypervisor/Host) is not able to stem anomalous latencies if the guest operating system is not equally optimized. The critical peak of over 1.8 milliseconds is a direct symptom of the internal architecture of the standard kernel: the absence of the PREEMPT_RT patch leaves the guest vulnerable to delays induced by non-preemptible critical sections (spinlocks), non-deferrable hardware interrupts, and unbounded priority inversion phenomena. 
+The empirical observation of this sustained 5-minute test demonstrates conclusively that the exclusive optimization of the virtualization infrastructure (Hypervisor/Host) is not able to stem anomalous latencies if the guest operating system is not equally optimized. The critical peak of over 6 milliseconds is a direct symptom of the internal architecture of the standard kernel. The absence of the `PREEMPT_RT` patch leaves the guest vulnerable to delays induced by non-preemptible critical sections (such as spinlocks), non-deferrable hardware interrupts, and unbounded priority inversion phenomena. 
 
 Therefore, to obtain reliable determinism in control contexts, the use of an RT Host proves not to be a sufficient condition.
 
 ## REAL-TIME KERNEL AND NO REAL-TIME VM
 
-This section provides a synthesis of the performance evaluation conducted over 30 measurement cycles (Runs 1–30). The objective was to determine the feasibility of achieving real-time determinism in a virtualized environment where the Guest OS utilizes a `PREEMPT_RT` patched kernel, while the Host remains a non-real-time infrastructure.
+This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a hybrid environment, configured with a Real-Time `PREEMPT_RT` patched Linux Guest hosted on a Standard (Non-Real-Time) Virtual Machine. The goal of this analysis is to evaluate if the guest's internal real-time scheduling can maintain determinism during sustained workloads when the underlying hypervisor lacks real-time optimizations.
 
-### Summary of Nominal Performance
-The analysis of the distribution histograms across all 30 runs demonstrates a high degree of consistency in nominal operating conditions. 
-* The mode of the latency distribution is consistently observed between 8 µs and 9 µs. 
-* This stability indicates that the PREEMPT_RT patch effectively minimizes internal scheduling jitter and task latency when the Virtual CPU (VCPU) is active and granted execution time.
-* The minimum observed latencies remain near 6–7 µs throughout the entire testing campaign.
-
-### Worst-Case Execution Time (WCET) and Host Interference
-Despite the favorable nominal performance, the presence of statistically significant outliers and histogram overflows confirms that this configuration is inherently non-deterministic.
-* Histogram overflows and large latency spikes (reaching values exceeding 300–4000 µs in several instances) indicate severe interruptions by the Host's scheduler.
-* These outliers are attributed to hypervisor-induced preemption, where the non-real-time Host suspends the Guest VCPU to handle physical interrupt requests or its own system processes.
-* The increased frequency of histogram overflows in the final blocks (Runs 21–30) highlights that while the Guest kernel is "RT-ready," it remains entirely subordinate to the Host's scheduling policies.
-
-### Concluding Remarks on Virtualization Determinism
-The consolidated data from all 30 runs supports a clear conclusion: the "RT Guest / Non-RT Host" configuration is insufficient for systems requiring strict Worst-Case Execution Time (WCET) guarantees.
-* The PREEMPT_RT patch successfully reduces internal task latency.
-* However, the host-level preemption creates a "long tail" in the latency distribution, preventing the establishment of a hard real-time execution bound.
-* Consequently, we define this architecture as "soft real-time" at best, suitable for general-purpose workloads, but unsuitable for hard real-time applications requiring predictable performance under all operating conditions.
-
-## REAL-TIME KERNEL AND REAL TIME VM
-
-This section provides a comprehensive analysis of 30 measurement cycles conducted in a "Full RT" environment, where a `PREEMPT_RT` patched Linux kernel is hosted on a Real-Time optimized Virtual Machine. The objective of this configuration is to validate the effectiveness of an end-to-end real-time stack in mitigating virtualization overhead and establishing a strict, deterministic upper bound for execution latency.
-
-### Nominal Performance and Average Latency
-The experimental data across all 30 runs indicates unparalleled stability in nominal conditions. Average latency metrics consistently stabilize between 8 µs and 9 µs, with minimum latencies frequently reaching 3 µs to 6 µs. This indicates that the guest kernel is operating with optimal efficiency: when the Virtual CPU (VCPU) is active, the `PREEMPT_RT` patch successfully manages the thread scheduling and interrupt handling with minimal internal jitter, effectively mirroring bare-metal performance for standard task cycles.
+### Nominal Performance and Average Latency 
+The data collected confirms exceptional baseline efficiency. The average latency value is strictly maintained at 7 µs for the entire duration of the 5-minute test. Furthermore, the absolute minimum latency recorded was 5 µs. The histogram distribution reveals a massive concentration around the mode, with over 92% of execution cycles completing in exactly 7 µs. This behavior indicates that the `PREEMPT_RT` patch effectively minimizes internal scheduling jitter, processing tasks extremely efficiently when the Virtual CPU (VCPU) is active.
 
 ### Worst-Case Execution Time (WCET) Analysis
-The transition to a Full RT stack demonstrates a significant improvement in worst-case performance compared to the previously tested configurations. While the previous setups were plagued by severe stochastic latency spikes (frequently exceeding 1800 µs and even peaking over 4200 µs), the Full RT stack maintains a much tighter constraint on the Worst-Case Execution Time (WCET). 
+The analysis of the Worst-Case Execution Time (WCET) reveals highly stable and deterministic behavior during this sustained test. The absolute maximum latency recorded reached a peak of only 93 µs. This data demonstrates a complete absence of the severe, prolonged hypervisor-induced preemption spikes that typically characterize standard host environments. 
 
-Across all 30 runs, the absolute maximum latency recorded was bounded at **448 µs** (observed in Run 11), with the vast majority of the runs maintaining peak latencies well under 150 µs. The "long tail" of the distribution—characteristic of hypervisor-induced preemption—has been effectively neutralized. Although minor outliers persist due to the inherent complexities of virtualized interrupt handling, the system demonstrates a robust ability to remain within deterministic bounds, drastically reducing the frequency and magnitude of scheduling delays.
+### Conclusions on the Hybrid Environment
+The empirical observation of this sustained 5-minute test demonstrates that optimizing the Guest OS with a `PREEMPT_RT` kernel yielded remarkably robust determinism, even while running on a Non-Real-Time Host. By successfully bounding the WCET strictly under 100 µs (peaking at 93 µs) and entirely avoiding latency overflows, the guest kernel managed to maintain a highly predictable execution environment. 
 
-The majority of test runs exhibit a constrained peak latency, with the "long tail" of the distribution—characteristic of hypervisor-induced preemption—being effectively neutralized. Although minor outliers persist due to the inherent complexities of virtualized interrupt handling, the system demonstrates a robust ability to remain within deterministic bounds, drastically reducing the frequency and magnitude of scheduling delays.
+In this specific prolonged testing scenario, the guest-level real-time optimizations proved sufficient to guarantee strict temporal constraints, effectively masking or avoiding the "long tail" latency distributions normally associated with non-deterministic hypervisors.
+
+## REAL-TIME KERNEL AND REAL TIME VM (FULL RT STACK)
+
+This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a "Full RT" environment, where a `PREEMPT_RT` patched Linux kernel is hosted on a Real-Time optimized Virtual Machine. The objective of this configuration is to validate the effectiveness of an end-to-end real-time stack in mitigating virtualization overhead and establishing a strict, deterministic upper bound for execution latency during a sustained workload.
+
+### Nominal Performance and Average Latency
+The experimental data collected demonstrates unparalleled stability under sustained nominal conditions. The average latency metric is exceptionally consistent, locked at 8 µs for the duration of the test. The absolute minimum latency recorded was 7 µs. The histogram distribution highlights this extreme efficiency, showing that the vast majority of execution cycles—over 92% of samples—completed in exactly 8 µs. This indicates that when the Virtual CPU (VCPU) is active, the `PREEMPT_RT` patch successfully manages thread scheduling and interrupt handling with virtually zero internal jitter, effectively mirroring bare-metal performance for standard task cycles.
+
+### Worst-Case Execution Time (WCET) Analysis
+The transition to a Full RT stack demonstrates a definitive improvement in worst-case performance, completely neutralizing the severe stochastic latency spikes observed in non-optimized configurations. Throughout the entire 5-minute sustained test, the absolute maximum latency (Worst-Case Execution Time) was strictly bounded at just 81 µs. The "long tail" of the distribution—characteristic of hypervisor-induced preemption and unoptimized kernel locks—has been entirely eliminated. The system demonstrates a robust, flawless ability to remain within deterministic bounds, drastically reducing the magnitude of any scheduling delays.
 
 ### Conclusions on the Full RT Architecture
-The consolidated data from all 30 runs provides conclusive evidence regarding the requirements for deterministic virtualization:
+The empirical observation of this sustained test provides conclusive evidence regarding the requirements for deterministic virtualization:
 
-1.  **End-to-End Determinism:** Achieving hard real-time guarantees is an end-to-end property. The optimization of the Guest kernel (`PREEMPT_RT`) is necessary to minimize internal jitter, but it is insufficient without a Real-Time optimized Host to prevent hypervisor-induced preemption of the VCPUs.
-2.  **Mitigation of Virtualization Overhead:** By synchronizing the scheduling policies between the Guest and the Host, we effectively eliminate "steal time," allowing the Guest OS to maintain consistent scheduling intervals.
-3.  **Viability for Critical Systems:** This "Full RT" configuration establishes a predictable WCET, proving that with proper infrastructure tuning, virtualized environments can reliably support safety-critical control applications that previously required dedicated bare-metal hardware.
-
-The absence of prolonged latency spikes in the Full RT stack confirms its viability as a production-grade architecture for real-time systems.
+*   **End-to-End Determinism:** Achieving hard real-time guarantees is an end-to-end property, and the combination of the `PREEMPT_RT` Guest kernel and a Real-Time Host successfully prevents hypervisor-induced preemption.
+*   **Absolute Stability:** The system maintained a strict upper bound of 81 µs over nearly 6 million consecutive execution cycles.
+*   **Zero Overflows:** The complete absence of histogram overflows confirms that the system never experienced uncontrolled latency spikes during the prolonged execution.
+*   **Viability for Critical Systems:** This "Full RT" configuration establishes a highly predictable WCET, proving that with proper infrastructure tuning, virtualized environments can reliably support safety-critical control applications that previously required dedicated bare-metal hardware.
