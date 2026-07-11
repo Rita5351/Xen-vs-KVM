@@ -111,6 +111,8 @@ Being effectively treated as a Type-2 hypervisor, KVM sits on top of an already 
 sudo apt -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu-system qemu-kvm virt-manager
 ```
 
+We installed QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.17)
+
 Once the installation was complete, we provisioned the guest Virtual Machine with the following hardware specifications:
 
 * **vCPUs:** 2
@@ -176,7 +178,7 @@ Furthermore, we appended specific parameters to the XML configuration to ensure 
 
 ### Installation and GUI Troubleshooting
 
-We installed the Xen hypervisor via the `xen-hypervisor-amd64` package. This process automatically generated the necessary GRUB bootloader entries to boot the Ubuntu system as **Dom0** (the privileged management domain). 
+We installed the Xen hypervisor 4.17.3 via the `xen-hypervisor-amd64` package. This process automatically generated the necessary GRUB bootloader entries to boot the Ubuntu system as **Dom0** (the privileged management domain). 
 
 During our initial boot tests, we encountered severe instability with the Graphical User Interface (GUI). Specifically, the `nouveau` open-source drivers—often relied upon for NVIDIA GPU compatibility—failed to initialize correctly on our testbed. Further investigation suggested that graphical drivers generally exhibit poor stability when running under Xen Dom0, a behavior observed across different hardware configurations. 
 
@@ -211,10 +213,6 @@ sudo dd if=/dev/nvme0n1p4 of=/dev/ubuntu-vg/ubuntu-24.04-domU status=progress
 sudo e2fsck -f /dev/ubuntu-vg/ubuntu-24.04-domU
 sudo tune2fs -U random /dev/ubuntu-vg/ubuntu-24.04-domU
 ```
-
-### Dom0 Resource Tuning
-
-Before deploying the guests, it is necessary to partition the hardware resources, which are assigned to Dom0 by default. This ensures that dedicated, isolated resources are available for the DomUs. We reduced the Dom0 footprint using the following commands shown [here](Xen/README.md)
 
 ### DomU Configuration and Deployment
 
@@ -280,3 +278,84 @@ Despite these extensive troubleshooting efforts, we observed that enabling the "
 Coupled with the graphical driver issues discussed previously, debugging this behavior proved to be a formidable challenge. The system most likely dropped into an `initramfs` recovery shell, which remained completely inaccessible to us in our headless setup. 
 
 Consequently, we decided to leave the "Fully Preemptible Kernel" option disabled for the Dom0 kernel. Instead, we opted for the "Low-Latency" scheduling model, which guaranteed a reliable boot process while still offering better responsiveness compared to the standard generic kernel.
+
+### Resource partitioning and NULL-scheduler
+
+In order to compare the effects of the scheduler choice on Xen, we swapped the default Credit2 scheduler with a pinned configuration, effectively using an offline scheduler (the NULL-scheduler). This is done to assess the current effects of the issues identitied by the previous analyses of Abeni and Faggioli, such as the priority invertion via QEMU and the `TIMER_SLOP` limitation. In order to do so, we changed the Xen boot configuration to use only the first 22 pCPUs for Dom0:
+
+```text
+menuentry 'Ubuntu GNU/Linux, with Xen 4.17-amd64 and Linux 6.18.35, null-sched and CPU pinning on 0-21' --class ubuntu --class gnu-linux --class gnu --class os --class xen {
+        insmod part_gpt
+        insmod ext2
+        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
+        echo    'Loading Xen 4.17-amd64 ...'
+        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
+            xen_rm_opts=
+        else
+            xen_rm_opts="no-real-mode edd=off"
+        fi
+        multiboot2      /xen-4.17-amd64.gz sched=null dom0_max_vcpus=22 dom0_vcpus_pin ${xen_rm_opts}
+        echo    'Loading Linux 6.18.35 ...'
+        module2 /vmlinuz-6.18.35 placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
+        echo    'Loading initial ramdisk ...'
+        module2 --nounzip   /initrd.img-6.18.35
+}
+
+menuentry 'Ubuntu GNU/Linux, with Xen 4.17-amd64 and Linux 6.18.35-rt5-ll, null-sched and CPU pinning on 0-21' --class ubuntu --class gnu-linux --class gnu --class os --class xen $menuentry_id_option 'xen-gnulinux-6.18.35-rt5-ll-advanced-0ae49e56-7bb9-4525-8d68-3684c45c63da' {
+        insmod part_gpt
+        insmod ext2
+        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
+        echo    'Loading Xen 4.17-amd64 ...'
+        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
+            xen_rm_opts=
+        else
+            xen_rm_opts="no-real-mode edd=off"
+        fi
+        multiboot2      /xen-4.17-amd64.gz sched=null dom0_max_vcpus=22 dom0_vcpus_pin ${xen_rm_opts}
+        echo    'Loading Linux 6.18.35-rt5-ll ...'
+        module2 /vmlinuz-6.18.35-rt5-ll placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
+        echo    'Loading initial ramdisk ...'
+        module2 --nounzip   /initrd.img-6.18.35-rt5-ll
+}
+```
+
+Also, we configured the guests to use only the pCPUs 22 and 23, so that they would have two dedicated cores with no interference from the Dom0:
+
+```conf
+# This configures either a HVM, a PVH or a PV guest
+type = "hvm"
+
+# Guest name
+name = "ubuntu-24.04-linux-6.18.35-rt5"
+
+# Kernel image to boot
+kernel = "/boot/vmlinuz-6.18.35-rt5"
+
+# Ramdisk (optional)
+ramdisk = "/boot/initrd.img-6.18.35-rt5"
+
+# Kernel command line options (to show output on console)
+extra = "root=/dev/xvda console=hvc0"
+
+# Initial memory allocation (4GB)
+memory = 4096
+maxmem = 4096
+
+# Number of VCPUS (2)
+cpus = "22-23"
+vcpus = 2
+maxvcpus = 2
+
+# Network devices
+vif = [ 'bridge=xenbr0' ]
+
+# Disk Devices
+disk = [ '/dev/ubuntu-vg/ubuntu-24.04-domU,raw,xvda,rw' ]
+```
+
+To be absolutely certain of the vCPUS to pCPUs fixed mapping, we also executed the following commands after the VM booted:
+
+```bash
+sudo xl vcpu-pin ubuntu-24.04-linux-6.18.35-rt5 0 22
+sudo xl vcpu-pin ubuntu-24.04-linux-6.18.35-rt5 1 23
+```
