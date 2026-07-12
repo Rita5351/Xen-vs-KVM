@@ -1,8 +1,7 @@
 # KVM
-This documentation describes the detailed procedure to configure an automated test cycle at the boot of the virtual machine. The system allows forcing the boot with a specific kernel via GRUB, running `cyclictest` for a preset number of iterations (30 cycles), and automatically rebooting the machine at the end of each session, disabling the cycle once completed.
+This documentation describes the detailed procedure to configure an automated test at the boot of the virtual machine. The system allows forcing the boot with a specific kernel via GRUB and running `cyclictest` automatically for a single session of 5 minutes, disabling the automation once completed.
 
-
-### Boot Kernel Configuration on GRUB (One-time)
+### 1. Boot Kernel Configuration on GRUB (One-time)
 
 To ensure the accuracy and consistency of deterministic tests, it is necessary to lock the boot loader onto a specific installed version of the Linux kernel.
 
@@ -39,7 +38,7 @@ sudo update-grub
 
 ### 2. Implementation of the Control and Test Script
 
-The Bash script manages the automation state through a persistent counter file, invokes `cyclictest` redirecting the results to a unique log file for each iteration, and launches the reboot command until the thirtieth execution is reached.
+The Bash script invokes `cyclictest` for a 5-minute duration, redirects the results to a log file, and disables the service upon completion to prevent execution on subsequent normal boots.
 
 #### Step 2.1: Script creation
 Create a new executable file in the system path dedicated to local scripts:
@@ -54,38 +53,21 @@ Paste the following code inside the file:
 ```bash
 #!/bin/bash
 
-# Paths and limits configuration
+# Paths configuration
 LOG_DIR="/var/log/cyclictest_results"
-COUNT_FILE="$LOG_DIR/run_count.txt"
-MAX_RUNS=30
 
 # Ensure the log directory exists
 mkdir -p "$LOG_DIR"
 
-# State counter initialization
-if [ ! -f "$COUNT_FILE" ]; then
-    echo 0 > "$COUNT_FILE"
-fi
+# Wait for system to fully settle before starting the test
+sleep 30
 
-CURRENT_RUN=$(cat "$COUNT_FILE")
+# Execute cyclictest with Real-Time priority for 5 minutes
+sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile="$LOG_DIR/results_hist.log"
 
-if [ "$CURRENT_RUN" -lt "$MAX_RUNS" ]; then
-    # Increment counter for the current iteration
-    NEXT_RUN=$((CURRENT_RUN + 1))
-    echo "$NEXT_RUN" > "$COUNT_FILE"
-    sleep 30
-
-    # Execute cyclictest with Real-Time priority (Modify parameters if necessary)
-    # Example parameters: -t1 (1 thread), -p 99 (max RT priority), -n (clock_nanosleep), -D 1m (duration 1 minute)
-    sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 1m -H 1000 --histfile="$LOG_DIR/results_hit_${NEXT_RUN}.log"
-
-    # Force reboot for the next cycle
-    reboot
-else
-    # Termination condition: remove the service to prevent infinite loops
-    systemctl disable cyclictest-reboot.service
-    echo "30-test cycle successfully completed. Automation disabled." > "$LOG_DIR/final_status.txt"
-fi
+# Termination condition: remove the service to prevent running on future reboots
+systemctl disable cyclictest-autorun.service
+echo "5-minute test successfully completed. Automation disabled." > "$LOG_DIR/final_status.txt"
 ```
 
 #### Step 2.3: Assign execution permissions
@@ -105,15 +87,15 @@ To ensure the script is executed immediately after the boot phase and in a non-i
 Create the service descriptor within the system units directory:
 
 ```bash
-sudo nano /etc/systemd/system/cyclictest-reboot.service
+sudo nano /etc/systemd/system/cyclictest-autorun.service
 ```
 
-#### Step 3.2: Service structure (`cyclictest-reboot.service`)
+#### Step 3.2: Service structure (`cyclictest-autorun.service`)
 Configure the unit with the following directives:
 
 ```ini
 [Unit]
-Description=Cyclictest Automation and Reboot Loop
+Description=Cyclictest Automation 5-Min Run
 After=network.target
 
 [Service]
@@ -129,7 +111,7 @@ WantedBy=multi-user.target
 
 ### 4. Enabling and Executing the Flow
 
-Once the components are defined, it is necessary to notify the service manager of the changes and enable the automatic startup of the test chain.
+Once the components are defined, it is necessary to notify the service manager of the changes and enable the automatic startup of the test.
 
 #### Step 4.1: Reload the systemd daemon
 ```bash
@@ -138,17 +120,17 @@ sudo systemctl daemon-reload
 
 #### Step 4.2: Enable the service at boot
 ```bash
-sudo systemctl enable cyclictest-reboot.service
+sudo systemctl enable cyclictest-autorun.service
 ```
 
-#### Step 4.3: Triggering the first cycle
-To start the automated sequence of the 30 tests, perform the first manual reboot of the KVM virtual machine:
+#### Step 4.3: Triggering the test
+To start the automated 5-minute test, perform a manual reboot of the KVM virtual machine:
 
 ```bash
 sudo reboot
 ```
 
-At the end of the thirtieth cycle, the incremental logs will be available in `/var/log/cyclictest_results/` and the system will remain stably booted on the set kernel, awaiting interaction.
+After the system boots, it will wait 30 seconds and then run the test for exactly 5 minutes. At the end of the process, the results will be available in `/var/log/cyclictest_results/results_hist.log`, the service will automatically disable itself, and the system will remain stably booted on the set kernel.
 
 ## NO-REAL-TIME KERNEL AND NO REAL-TIME VM
 
