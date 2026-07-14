@@ -1,28 +1,28 @@
 # Xen
-This section describes the detailed procedure to configure a consistent test cycle for the virtual machine. The system allows forcing the boot with a specific kernel via GRUB and running the `cyclictest` utility to evaluate scheduling latency.
+This section describes the detailed procedure to configure a consistent test cycle for the virtual machine. The system allows accessing the system with SSH and running the `cyclictest` utility to evaluate scheduling latency.
 
 ### 1. Accessing Dom0 via SSH
-To launch a shell on the "Dom0" administrative domain, a remote connection was established from a secondary machine. This approach allows for the remote execution of commands as if operating locally, which is a necessary step since the Xen hypervisor operates natively without a Graphical User Interface (GUI).
+To launch a shell on the Dom0 administrative domain, a remote connection was established from a secondary machine. This approach allows for the remote execution of commands as if operating locally, which is a necessary step since in our setup the system running the Xen hypervisor lacked a Graphical User Interface (GUI).
 
 #### Step 1.1: Establishing the remote connection
 Execute the following command to access Dom0 from the secondary machine:
 
 ```bash
-ssh username@IP_ADDRESS
+ssh unina@192.168.1.166
 ```
 
 #### Step 1.2: Guest domain creation
 Subsequently, a guest virtual machine (DomU) was initialized based on the configuration specified during the setup phase by executing the following command:
 
 ```bash
-sudo xl create -c config_file 
+sudo xl create -c /etc/xen/ubuntu-24.04-linux-6.18.35.conf
 ```
 
 #### Step 1.3: Executing the cyclictest utility
 Finally, the `cyclictest` tool was executed to measure system latency, employing the identical parameters previously defined for the KVM testing environment:
 
-```bash
-sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile=histogram_file
+
+sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile="results_ll_rt.log"
 ```
 
 ## NON-REAL-TIME KERNEL AND NON-REAL-TIME VM (CREDIT2 SCHEDULER)
@@ -93,14 +93,13 @@ The empirical observation of this sustained test provides insights into the beha
 * **Hypervisor-Induced Jitter:** The average latency of 32 µs confirms that the Credit2 scheduler introduces inherent, unavoidable jitter.
 * **Effective Internal Determinism:** The guest-level optimizations seemed sufficient to maintain relatively tight temporal constraints, avoiding large latency spikes despite the general-purpose hypervisor layer.
 
-### Da rivedere
 ## Emulating the Null Scheduler via Static vCPU Pinning
 
 Following the initial performance analyses with the default Xen configuration, an attempt was made to replace the Credit2 scheduler with the Null Scheduler to evaluate a purely static, offline scheduling approach. However, this reconfiguration proved unsuccessful. The deployed Xen hypervisor rejected the modification, defaulting back to the Credit2 scheduler despite the explicit inclusion of the Null Scheduler boot parameters. Furthermore, subsequent attempts to dynamically construct a dedicated CPU-POOL at runtime resulted in system errors. This limitation is likely attributable to the experimental status of the Null Scheduler in Xen version 4.17.3, rendering it unavailable or unsupported within the specific software stack utilized for this study.
 
 To circumvent this hypervisor limitation and achieve an operational state strictly equivalent to an offline scheduler, a rigid static configuration was implemented. This methodology involved explicitly reducing the number of virtual CPUs (vCPUs) allocated to the privileged domain (Dom0) and enforcing strict vCPU-to-pCPU pinning. Concurrently, the exact number of vCPUs assigned to the guest domain (DomU) was fixed and equally pinned to dedicated physical cores. 
 
-By enforcing this absolute isolation, the active scheduling algorithms are entirely bypassed in practice. The hypervisor's decision-making process is minimized, effectively restricting it to statically mapping tasks to their exclusively designated physical CPUs, thereby mimicking the exact deterministic behavior expected from the Null Scheduler.
+By enforcing this absolute isolation, the active scheduling algorithms are entirely bypassed in practice. The hypervisor's decision-making process is minimized, effectively restricting it to statically mapping tasks to their exclusively designated physical CPUs, thereby mimicking the exact deterministic behavior expected from the Null Scheduler. Some other latent effects, such as some residual latency, may still be present, caused by the way the Credit2 scheduler is implemented.
 
 ## NON-REAL-TIME KERNEL AND NON-REAL-TIME VM (NULL SCHEDULER)
 
@@ -174,24 +173,27 @@ The empirical observation of this sustained test provides insights into the beha
 
 In earlier research evaluating the real-time capabilities of hypervisors, a notable priority inversion issue was identified within the Xen architecture. The problem stems from the architectural dependency of Hardware Virtual Machine (HVM) guests on the Device Model. In Xen, when creating an HVM guest that requires a Device Model, this model is typically an instance of QEMU that executes as a standard process inside Domain 0 (Dom0). Because Dom0 is scheduled alongside other virtual machines by the hypervisor, a low-privilege QEMU process on Dom0 could be preempted when Dom0 is placed under heavy computational stress. Consequently, a Real-Time (RT) DomU waiting for the QEMU Device Model could suffer from unbounded latency, compromising its real-time execution guarantees.
 
-To investigate whether this architectural bottleneck persists in modern versions of Xen, a series of experiments were conducted. The objective is to determine if elevating the QEMU process to a maximum Real-Time priority (FIFO 99) mitigates preemption and improves the latency bounds of the DomU compared to the default Xen configuration.
+To investigate whether this architectural bottleneck persists in modern versions of Xen, a series of experiments were conducted. The objective is to determine if elevating the QEMU process to a maximum Real-Time priority (FIFO scheduler with priority 99) mitigates preemption and improves the latency bounds of the DomU compared to the default Xen configuration.
 
 To reproduce and analyze the aforementioned priority inversion on a modern Xen version, the environment was configured with strict resource partitioning.
 
 * **CPU Pinning**: Dom0 was pinned to the first 22 physical CPUs (pCPUs), while the Hardware Virtual Machine (HVM) DomU was pinned to the last 2 pCPUs.
-* **Host Stress**: To simulate heavy load and induce potential starvation in Dom0, stress-ng was executed with the following parameters: stress-ng --cpu 22 --vm 12 --vm-bytes 2G --timeout 10m.
-* **Kernel Configurations**: Tests were run across the usual four permutations of Dom0 and DomU kernels:
-* **QEMU Priority Mitigation**: For each kernel combination, a baseline test (default QEMU priority) was compared against a mitigated test (maxprioqemu), wherein the QEMU Device Model process in Dom0 was explicitly set to the SCHED_FIFO policy with a priority of 99.
+* **Host Stress**: To simulate heavy load and induce potential starvation in Dom0, stress-ng was executed with the following parameters:
+  ```bash
+  stress-ng --cpu 22 --vm 12 --vm-bytes 2G --timeout 10m
+  ```
+* **Kernel Configurations**: Tests were run across the usual four permutations of Dom0 and DomU kernels.
+* **QEMU Priority Mitigation**: For each kernel combination, a baseline test (default QEMU priority) was compared against a mitigated test (`maxprioqemu`), wherein the QEMU Device Model process in Dom0 was explicitly set to the `SCHED_FIFO` policy with a priority of 99.
 
+## Da rivedere
 ### Empirical Results
 
 A thorough data analysis of the provided cyclictest histograms reveals the following key findings:
 
 * **Absence of Priority Inversion Spikes**: In older versions of Xen suffering from the QEMU starvation issue, the expected symptom would be a pronounced "heavy tail" in the histogram, indicating extreme, unbounded latencies where the DomU was blocked waiting for Dom0. The empirical data across all results_null_hvm_pinned_* logs demonstrates no such extreme outliers in the default priority configurations.
-* **Latency Distribution Parity**: The latency distributions between the default configurations and their maxprioqemu counterparts are virtually identical. For instance, in the NRT Dom0 / RT DomU scenario, the histogram peak behaviors (e.g., the high density of recordings in the 12 µs to 20 µs buckets) show no statistically significant divergence whether QEMU is operating at default or maximum priority.
+* **Latency Distribution Parity**: The latency distributions between the default configurations and their mitigated counterparts are virtually identical.
 * **Consistent Upper Bounds**: The maximum recorded latencies (Worst-Case Execution Time) in the standard configurations are directly comparable to those in the maximum priority configurations. Across both the Low-Latency (LL) and Non-Real-Time (NRT) Dom0 environments, elevating QEMU's priority did not tighten the worst-case temporal bounds.
 
-Based on the experimental data, the priority inversion problem previously documented in Section 6.2 of the literature is non-existent in this modern Xen deployment. Changing the Device Model (QEMU) priority to FIFO 99 on Dom0 yields no beneficial effect for the latency bounds of real-time tasks inside the DomU.
-
+Based on the experimental data, the priority inversion problem previously documented in Section 6.2 of the Abeni and Faggioli research seems to be non-existent in this modern Xen deployment. Changing the Device Model priority yields no beneficial effect for the latency bounds of real-time tasks inside the DomU.
 
 This behavior indicates that modern Xen HVM implementations successfully decouple essential local timer and interrupt deliveries from the QEMU Device Model. Because CPU-bound real-time workloads (like cyclictest) primarily exercise timer wakeups rather than complex I/O, the DomU can accurately maintain its temporal constraints utilizing hardware virtualization extensions alone. Therefore, manually elevating the priority of the Dom0 QEMU process is unnecessary for maintaining real-time determinism in contemporary Xen environments.
