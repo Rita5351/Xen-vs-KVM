@@ -21,7 +21,7 @@ sudo xl create -c /etc/xen/ubuntu-24.04-linux-6.18.35.conf
 #### Step 1.3: Executing the cyclictest utility
 Finally, the `cyclictest` tool was executed to measure system latency, employing the identical parameters previously defined for the KVM testing environment:
 
-
+```bash
 sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile="results_ll_rt.log"
 ```
 
@@ -197,6 +197,7 @@ A thorough data analysis of the provided cyclictest histograms reveals the follo
 Based on the experimental data, the priority inversion problem previously documented in Section 6.2 of the Abeni and Faggioli research seems to be non-existent in this modern Xen deployment. Changing the Device Model priority yields no beneficial effect for the latency bounds of real-time tasks inside the DomU.
 
 This behavior indicates that modern Xen HVM implementations successfully decouple essential local timer and interrupt deliveries from the QEMU Device Model. Because CPU-bound real-time workloads (like cyclictest) primarily exercise timer wakeups rather than complex I/O, the DomU can accurately maintain its temporal constraints utilizing hardware virtualization extensions alone. Therefore, manually elevating the priority of the Dom0 QEMU process is unnecessary for maintaining real-time determinism in contemporary Xen environments.
+<<<<<<< HEAD
 
 
 ## TACLe Benchmark
@@ -242,3 +243,5 @@ Questo scenario rappresenta il caso di test cruciale per valutare l'efficacia de
 ```bash
 sudo ./huff_enc --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 -q > ./results/results_tacle_huffenc_pin_stressdomU.log
 ```
+=======
+>>>>>>> refs/remotes/origin/main
