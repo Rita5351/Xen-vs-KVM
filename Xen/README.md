@@ -21,7 +21,7 @@ sudo xl create -c /etc/xen/ubuntu-24.04-linux-6.18.35.conf
 #### Step 1.3: Executing the cyclictest utility
 Finally, the `cyclictest` tool was executed to measure system latency, employing the identical parameters previously defined for the KVM testing environment:
 
-
+```bash
 sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile="results_ll_rt.log"
 ```
 
