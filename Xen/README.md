@@ -197,3 +197,48 @@ A thorough data analysis of the provided cyclictest histograms reveals the follo
 Based on the experimental data, the priority inversion problem previously documented in Section 6.2 of the Abeni and Faggioli research seems to be non-existent in this modern Xen deployment. Changing the Device Model priority yields no beneficial effect for the latency bounds of real-time tasks inside the DomU.
 
 This behavior indicates that modern Xen HVM implementations successfully decouple essential local timer and interrupt deliveries from the QEMU Device Model. Because CPU-bound real-time workloads (like cyclictest) primarily exercise timer wakeups rather than complex I/O, the DomU can accurately maintain its temporal constraints utilizing hardware virtualization extensions alone. Therefore, manually elevating the priority of the Dom0 QEMU process is unnecessary for maintaining real-time determinism in contemporary Xen environments.
+
+
+## TACLe Benchmark
+Questa sezione della documentazione illustra il razionale dietro la selezione dei benchmark estratti dalla suite **TACLeBench** versione 1.9 e la metodologia adottata per la loro esecuzione all'interno della nostra architettura. L'obiettivo è fornire un carico di lavoro eterogeneo per validare accuratamente le latenze di esecuzione e la stabilità delle performance in ambienti con rigidi requisiti real-time.
+
+## 1. Selezione dei Benchmark
+Abbiamo selezionato un programma rappresentativo per ciascuna delle categorie principali di TACLeBench, garantendo una copertura ottimale dei diversi pattern di esecuzione.
+
+*   **Kernel Benchmark (`matrix1`):** Isola le porzioni di codice computazionalmente più intensive per valutare le performance pure della CPU e l'efficienza della cache.
+*   **Sequential Benchmark (`huff_enc`):** Valuta l'elaborazione sequenziale e i pattern di accesso alla memoria. La compressione dati (325 SLOC, David Bourgin) è eccellente per misurare le variazioni di latenza in esecuzione a singolo thread.
+*   **Test Benchmark (`test3`):** Uno stress test artificiale per l'analisi WCET (Worst-Case Execution Time, 4235 SLOC, Universität des Saarlandes). Spinge al limite il motore di esecuzione per misurare i margini di sicurezza temporale e la robustezza del sistema.
+*   **Parallel Benchmark (`Debie`):** Strumento di osservazione aerospaziale (6615 SLOC, Tidorum Ltd) composto da 8 task. Essenziale per testare i meccanismi di sincronizzazione e la preemption in scenari multi-tasking.
+*   **Application Benchmark (`lift`):** Un controller per ascensori (361 SLOC, Martin Schoeberl). Verifica che le metriche di latenza dei test sintetici garantiscano stabilità in una vera applicazione di controllo cyber-fisico.
+
+## 2. Metodologia di Esecuzione e Scenari di Test
+
+Per analizzare in modo rigoroso il comportamento del sistema e l'impatto dell'architettura di virtualizzazione, **tutti e 5 i benchmark selezionati sono stati eseguiti su un kernel LL-RT (Low-Latency Real-Time)**. 
+
+Per ciascun benchmark, abbiamo definito una matrice di test composta da quattro scenari operativi. In tutte le configurazioni di base, al **Dom0 sono state assegnate 20 vCPUs**. Le variabili analizzate riguardano l'applicazione del pinning delle vCPU (fondamentale per evitare le migrazioni di contesto e stabilizzare le latenze) e l'introduzione di un carico di stress (rumore) proveniente da un altro DomU.
+
+Di seguito vengono riportati i comandi esatti utilizzati per l'esecuzione, prendendo come esempio di riferimento il benchmark sequenziale `huff_enc`. La medesima struttura di test è stata applicata a tutti gli altri programmi della suite.
+
+### Scenario A: Senza pinning, senza rumore del DomU
+Questa configurazione rappresenta l'esecuzione baseline assoluta del sistema. Il carico di lavoro viene eseguito senza applicare alcun vincolo di affinità restrittivo (pinning) per le vCPU, lasciando allo scheduler dell'hypervisor la totale libertà di allocare e migrare i thread sulle risorse fisiche disponibili. In assenza di interferenze esterne o carichi concorrenti provenienti da altri domini, questo scenario ci permette di isolare e misurare l'overhead intrinseco introdotto dalle sole meccaniche di scheduling e dalle migrazioni di contesto "naturali", fornendo un punto di partenza fondamentale per tutte le valutazioni successive.
+```bash
+sudo ./huff_enc --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 -q > ./results/results_tacle_huffenc_nopin.log
+```
+
+### Scenario B: Senza pinning, con rumore del DomU
+Questo scenario introduce la problematica del "noisy neighbor" (vicino rumoroso) all'interno di un ambiente di esecuzione non vincolato. L'obiettivo è analizzare in modo approfondito l'impatto dell'interferenza generata da un dominio guest attivo (DomU) sulle prestazioni di un altro DomU. Mantenendo il sistema di scheduling completamente libero di allocare e riposizionare dinamicamente le vCPU, andiamo a valutare come la competizione per le risorse condivise degradi i tempi di risposta. Questo test ci permette di osservare il comportamento del sistema quando tenta di bilanciare i carichi in presenza di alta contesa, evidenziando la potenziale instabilità e le latenze aggiuntive causate dai continui context switch.
+```bash
+sudo ./huff_enc --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 -q > ./results/results_tacle_huffenc_nopin_stressdomU.log
+```
+
+### Scenario C: Con pinning, senza rumore del DomU
+Esecuzione ottimizzata che isola il carico di lavoro vincolandolo a vCPU specifiche tramite pinning, in stretta assenza di interferenze esterne. Questo scenario definisce la baseline di riferimento ideale: stabilendo le prestazioni ottimali in condizioni di totale isolamento, ci fornisce il metro di paragone necessario per valutare l'efficacia del partizionamento dell'hypervisor. Ci permette, nei test successivi, di misurare esattamente se e in che modo il rumore generato all'interno di un DomU riesca a superare le barriere di isolamento e impattare le performance di un altro dominio.
+```bash
+sudo ./huff_enc --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 -q > ./results/results_tacle_huffenc_pin.log
+```
+
+### Scenario D: Con pinning, con rumore del DomU
+Questo scenario rappresenta il caso di test cruciale per valutare l'efficacia dell'isolamento fornito dall'hypervisor. L'obiettivo è analizzare il comportamento effettivo del sistema per misurare come e quanto il rumore generato in modo concorrente all'interno di un DomU impatti le prestazioni di un altro dominio. Ci permette di verificare se, pur applicando il pinning delle vCPU per vincolare le risorse, le interferenze (come la contesa per la cache condivisa o il bus di memoria) riescano a propagarsi tra i domini, degradando la stabilità e la predicibilità temporale del carico di lavoro.
+```bash
+sudo ./huff_enc --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 -q > ./results/results_tacle_huffenc_pin_stressdomU.log
+```
