@@ -37,6 +37,8 @@ To quantify response times, the jitter interval, and the Worst-Case Execution Ti
 
 The analyses in the following paragraphs offer a comprehensive overview of the limitations of fair-share scheduling and the effectiveness of the various kernels in mitigating latency spikes within their respective domains.
 
+![Baseline Performance - Credit2 Scheduler (No Noise)](tests/plots/svg/xen_nonoise.svg)
+
 ### NON-REAL-TIME KERNEL AND NON-REAL-TIME VM (CREDIT2 SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. The objective of this analysis is to evaluate the baseline latency, virtualization overhead, and scheduling patterns provided by Xen's general-purpose scheduler during a sustained workload.
@@ -53,6 +55,7 @@ The empirical observation of this sustained test provides initial insights into 
 * **Bounded but Variable Latency:** The system bounded the WCET to 369 µs, which suggests that Credit2 can limit unbounded latency starvation to a certain extent.
 * **Average Jitter:** The average latency of 32 µs and the broad spread of execution times highlight the inherent jitter introduced by fair-share scheduling algorithms.
 * **Suitability:** This configuration appears capable of handling general-purpose workloads. However, the 369 µs peak suggests that further configuration might be needed if stricter real-time constraints are required.
+
 
 ### NON-REAL-TIME KERNEL AND REAL-TIME VM (CREDIT2 SCHEDULER)
 
@@ -114,7 +117,9 @@ Experimental analysis has shown that adding this load to Dom0 does not produce a
 *   **Performance Variation Between NRT and RT Kernels:** Although the opposite might be expected, the stress workload only marginally affects a DomU configured with a Non-Real-Time (NRT) kernel, while causing a severe and counter-intuitive impact on a DomU configured with a Real-Time (RT) kernel. Executing the load in Dom0 caused the latency of an RT kernel in the DomU to increase drastically (rising, depending on the hardware, from approximately 1000 µs up to 4000 µs).
 *   **Role of the Virtualization Technology:** This anomalous relationship between the load in Dom0 and the increased latency in the DomU occurs specifically when using Hardware Virtual Machine (HVM) guests. Conversely, if guests with paravirtualization support (PV or PVH) are used, the stress workload running in Dom0 has barely any effect, allowing the RT kernel in the DomU to maintain better performance.
 *   **Interference with the Device Model (QEMU):** HVM guests require an instance of QEMU running in Dom0 to act as their Device Model (DM). The stress workload introduced in Dom0 risks preempting the DM process exactly when the DomU needs it to execute operations, thereby causing the observed latency spikes. This phenomenon indicates that an RT kernel within an HVM DomU interacts much more frequently with its Device Model compared to an NRT kernel.
-In this section we will reproduce the same experiments and analayze the results.  
+In this section we will reproduce the same experiments and analayze the results. 
+
+![Performance under Stress Workload - Credit2 Scheduler](tests/plots/svg/xen_backgroundnoise.svg)
  
 ### NON-REAL-TIME HOST KERNEL AND NON-REAL-TIME GUEST KERNEL (CREDIT2 SCHEDULER)
  
@@ -137,7 +142,8 @@ The empirical observation of this sustained test provides initial insights into 
 * **Average Jitter:** The average latency of 35 µs and the broad spread of execution times highlight the inherent jitter introduced by fair-share scheduling algorithms.
 
 * **Suitability:** This configuration appears capable of handling general-purpose workloads. However, the 239 µs peak suggests that further configuration might be needed if stricter real-time constraints are required.
- 
+
+
 ### NON-REAL-TIME HOST KERNEL AND REAL-TIME GUEST KERNEL (CREDIT2 SCHEDULER)
  
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. The configuration features a standard (Non-Real-Time) Linux Dom0 and a `PREEMPT_RT` patched DomU. The objective is to observe how effectively the guest's internal scheduling can manage execution times despite the privileged domain having a general-purpose scheduler.
@@ -219,6 +225,8 @@ Following the initial performance analyses with the default Xen configuration, a
 To circumvent this hypervisor limitation and achieve an operational state strictly equivalent to an offline scheduler, a rigid static configuration was implemented. This methodology involved explicitly reducing the number of virtual CPUs (vCPUs) allocated to the privileged domain (Dom0) and enforcing strict vCPU-to-pCPU pinning. Concurrently, the exact number of vCPUs assigned to the guest domain (DomU) was fixed and equally pinned to dedicated physical cores. 
 
 By enforcing this absolute isolation, the active scheduling algorithms are entirely bypassed in practice. The hypervisor's decision-making process is minimized, effectively restricting it to statically mapping tasks to their exclusively designated physical CPUs, thereby mimicking the exact deterministic behavior expected from the Null Scheduler. Some other latent effects, such as some residual latency, may still be present, caused by the way the Credit2 scheduler is implemented.
+
+![Baseline Performance - Static vCPU Pinning/Null Scheduler (No Noise)](tests/plots/svg/xen_null_nonoise.svg)
 
 ### NON-REAL-TIME KERNEL AND NON-REAL-TIME VM (NULL SCHEDULER)
 
@@ -304,6 +312,8 @@ To reproduce and analyze the aforementioned priority inversion on a modern Xen v
 * **Kernel Configurations**: Tests were run across the usual four permutations of Dom0 and DomU kernels.
 * **QEMU Priority Mitigation**: For each kernel combination, a baseline test (default QEMU priority) was compared against a mitigated test (`maxprioqemu`), wherein the QEMU Device Model process in Dom0 was explicitly set to the `SCHED_FIFO` policy with a priority of 99.
 
+![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/xen_backgroundnoise_maxprioqemu.svg)
+
 ### Empirical Results
 
 A thorough data analysis of the provided cyclictest histograms reveals the following key findings:
@@ -315,6 +325,10 @@ A thorough data analysis of the provided cyclictest histograms reveals the follo
 Based on the experimental data, the priority inversion problem previously documented in Section 6.2 of the Abeni and Faggioli research seems to be non-existent in this modern Xen deployment. Changing the Device Model priority yields no beneficial effect for the latency bounds of real-time tasks inside the DomU.
 
 This behavior indicates that modern Xen HVM implementations successfully decouple essential local timer and interrupt deliveries from the QEMU Device Model. Because CPU-bound real-time workloads (like cyclictest) primarily exercise timer wakeups rather than complex I/O, the DomU can accurately maintain its temporal constraints utilizing hardware virtualization extensions alone. Therefore, manually elevating the priority of the Dom0 QEMU process is unnecessary for maintaining real-time determinism in contemporary Xen environments.
+
+![Performance under Stress - Static Pinning (Default QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise.svg)
+
+![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise_maxprioqemu.svg)
 
 ## TACLe Benchmark
 Questa sezione della documentazione illustra il razionale dietro la selezione dei benchmark estratti dalla suite **TACLeBench** versione 1.9 e la metodologia adottata per la loro esecuzione all'interno della nostra architettura. L'obiettivo è fornire un carico di lavoro eterogeneo per validare accuratamente le latenze di esecuzione e la stabilità delle performance in ambienti con rigidi requisiti real-time.

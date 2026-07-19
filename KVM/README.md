@@ -131,6 +131,8 @@ sudo reboot
 
 After the system boots, it will wait 30 seconds and then run the test for exactly 5 minutes. At the end of the process, the results will be available in `/var/log/cyclictest_results/results_hist.log`, the service will automatically disable itself, and the system will remain stably booted on the set kernel.
 
+![Baseline Performance - KVM ](KVM/plot/result_1.png)
+
 ## NON-REAL-TIME HOST AND NON-REAL-TIME GUEST
 
 This section presents an analysis of a single, extended 5-minute `cyclictest` run conducted in a standard environment, featuring a Non-Real-Time guest Linux kernel hosted on a Non-Real-Time host system. The objective is to establish a performance baseline and assess system determinism in the absence of real-time optimizations, such as the `PREEMPT_RT` patch or a real-time tuned host hypervisor.
