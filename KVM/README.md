@@ -131,7 +131,7 @@ sudo reboot
 
 After the system boots, it will wait 30 seconds and then run the test for exactly 5 minutes. At the end of the process, the results will be available in `/var/log/cyclictest_results/results_hist.log`, the service will automatically disable itself, and the system will remain stably booted on the set kernel.
 
-![Baseline Performance - KVM ](KVM/plot/result_1.png)
+![Baseline Performance - KVM ](tests/plot/svg/kvm_nonoise.svg)
 
 ## NON-REAL-TIME HOST AND NON-REAL-TIME GUEST
 
