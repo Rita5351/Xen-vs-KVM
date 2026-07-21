@@ -1,53 +1,18 @@
 # KVM
 This documentation describes the detailed procedure to configure an automated test at the boot of the virtual machine. The system allows forcing the boot with a specific kernel via GRUB and running `cyclictest` automatically for a single session of 5 minutes, disabling the automation once completed.
 
-### 1. Boot Kernel Configuration on GRUB (One-time)
-
-To ensure the accuracy and consistency of deterministic tests, it is necessary to lock the boot loader onto a specific installed version of the Linux kernel.
-
-#### Step 1.1: List available kernel entries
-Identify the exact identification string of the desired kernel by analyzing the GRUB configuration:
-
-```bash
-awk -F\' '/menuentry / {print $2}' /boot/grub/grub.cfg
-```
-
-*Note: If the kernel is located inside a submenu (e.g., "Advanced options for Ubuntu"), the syntax to use for the configuration file will be `SubmenuName>KernelSpecificationEntry`.*
-
-#### Step 1.2: Modify GRUB parameters
-Open the main GRUB configuration file for editing:
-
-```bash
-sudo nano /etc/default/grub
-```
-
-Replace the `GRUB_DEFAULT` directive by setting the path extracted in the previous step (enclosed in quotes). For example:
-
-```text
-GRUB_DEFAULT="Advanced options for Ubuntu>Ubuntu, with Linux 6.18.35"
-```
-
-#### Step 1.3: Update the boot loader
-Release the new configuration to make it persistent on the next boot:
-
-```bash
-sudo update-grub
-```
-
----
-
-### 2. Implementation of the Control and Test Script
+## 1. Implementation of the Control and Test Script
 
 The Bash script invokes `cyclictest` for a 5-minute duration, redirects the results to a log file, and disables the service upon completion to prevent execution on subsequent normal boots.
 
-#### Step 2.1: Script creation
+### Step 1.1: Script creation
 Create a new executable file in the system path dedicated to local scripts:
 
 ```bash
 sudo nano /usr/local/bin/run_cyclictest.sh
 ```
 
-#### Step 2.2: Script code (`run_cyclictest.sh`)
+### Step 1.2: Script code (`run_cyclictest.sh`)
 Paste the following code inside the file:
 
 ```bash
@@ -69,7 +34,7 @@ sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 
 systemctl disable cyclictest-autorun.service
 ```
 
-#### Step 2.3: Assign execution permissions
+### Step 1.3: Assign execution permissions
 Configure the correct POSIX permissions to allow systemd to invoke the script:
 
 ```bash
@@ -78,18 +43,18 @@ sudo chmod +x /usr/local/bin/run_cyclictest.sh
 
 ---
 
-### 3. Configuration of the Systemd Unit Service
+## 2. Configuration of the Systemd Unit Service
 
 To ensure the script is executed immediately after the boot phase and in a non-interactive context, a `oneshot` type systemd service is implemented.
 
-#### Step 3.1: Unit file creation
+### Step 2.1: Unit file creation
 Create the service descriptor within the system units directory:
 
 ```bash
 sudo nano /etc/systemd/system/cyclictest-autorun.service
 ```
 
-#### Step 3.2: Service structure (`cyclictest-autorun.service`)
+### Step 2.2: Service structure (`cyclictest-autorun.service`)
 Configure the unit with the following directives:
 
 ```ini
@@ -108,21 +73,21 @@ WantedBy=multi-user.target
 
 ---
 
-### 4. Enabling and Executing the Flow
+## 3. Enabling and Executing the Flow
 
 Once the components are defined, it is necessary to notify the service manager of the changes and enable the automatic startup of the test.
 
-#### Step 4.1: Reload the systemd daemon
+### Step 3.1: Reload the systemd daemon
 ```bash
 sudo systemctl daemon-reload
 ```
 
-#### Step 4.2: Enable the service at boot
+### Step 3.2: Enable the service at boot
 ```bash
 sudo systemctl enable cyclictest-autorun.service
 ```
 
-#### Step 4.3: Triggering the test
+### Step 3.3: Triggering the test
 To start the automated 5-minute test, perform a manual reboot of the KVM virtual machine:
 
 ```bash
@@ -189,3 +154,5 @@ The empirical observation of this sustained test provides conclusive evidence re
 *   **Absolute Stability:** The system maintained a strict upper bound of 81 µs over nearly 6 million consecutive execution cycles.
 *   **Zero Overflows:** The complete absence of histogram overflows confirms that the system never experienced uncontrolled latency spikes during the prolonged execution.
 *   **Viability for Critical Systems:** This "Full RT" configuration establishes a highly predictable WCET, proving that with proper infrastructure tuning, virtualized environments can reliably support safety-critical control applications that previously required dedicated bare-metal hardware.
+
+
