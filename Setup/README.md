@@ -97,31 +97,19 @@ Below are the specific configuration steps applied to our testbed, which feature
 
 To achieve true real-timeliness after installation, we must move beyond the default `PREEMPT_DYNAMIC` schema. While `PREEMPT_DYNAMIC` allows the kernel to dynamically determine preemption modes (e.g., *none*, *voluntary*, or *full*), it is not designed for real-time workloads and lacks hard guarantees for interrupt latency and thread scheduling.
 
+### OS-level isolation
+
+Given the presence of some counterintuitive results, we decided to configure the operating system to adopt additional isolation mechanisms, aiming to identify the possible cause of such behaviors by minimizing the variables introduced by the OS scheduler.
+
 #### Isolation and Configuration Steps
+The isolation was implemented at the operating system level through various techniques, including:
 
 * **Kernel scheduling isolation (`isolcpus`):** Use the `isolcpus=` boot parameter to prevent the scheduler from assigning tasks to a specific set of CPUs, thereby avoiding general SMP balancing.
 * **Kernel house-keeping noise (`nohz_full`):** Address kernel house-keeping noise by appending `nohz_full=` to enable Tickless Mode, which reduces OS overhead on those selected CPUs.
 * **RCU callback offloading (`rcu_nocbs`):** To further minimize latencies imposed by memory allocators in `softirq` contexts, apply RCU callback offloading to dedicated kernel threads using the `rcu_nocbs=` parameter.
 * **IRQ affinity:** Configure IRQ affinity to ensure hardware interrupts are kept away from our isolated cores as much as possible.
 
-## KVM
-Being effectively treated as a Type-2 hypervisor, KVM sits on top of an already booted operating system. The host OS manages it similarly to a user-space application, where the virtual CPUs (vCPUs) are scheduled as standard host processes. Consequently, the installation process is as straightforward as running the following command:
-
-```bash
-sudo apt -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu-system qemu-kvm virt-manager
-```
-
-We installed QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.17)
-
-Once the installation was complete, we provisioned the guest Virtual Machine with the following hardware specifications:
-
-* **vCPUs:** 2
-* **RAM:** 4 GB
-* **Storage:** 25 GB virtual hard disk
-
-We installed both the 6.18.35 and the 6.18.35-rt5 kernels in the same manner as on the host, with the exception that we did not enable the NVMe block device support, since we will be using VirtIO.
-
-### Modifying the Bootloader (GRUB)
+The isolation was applied to both the host and the virtualized environment. The host system was configured to avoid scheduling tasks on the physical CPUs dedicated to running the virtual machines. Concurrently, the guest system was also configured so that the virtual machine's scheduler could not assign tasks to the cores reserved for real-time applications.
 
 On the host, we fully isolated **CPU22** and **CPU23** on our 24-core system, configuring GRUB by adding a custom boot entry in `/etc/grub.d/40_custom`:
 
@@ -145,8 +133,32 @@ menuentry 'Ubuntu 24.04 (6.18.35-rt5-full)'{
 }
  ```
 
-### Tweaking the VM
-Furthermore, we appended specific parameters to the XML configuration to ensure stable and predictable VM behaviour:
+
+## KVM
+Being effectively treated as a Type-2 hypervisor, KVM sits on top of an already booted operating system. The host OS manages it similarly to a user-space application, where the virtual CPUs (vCPUs) are scheduled as standard host processes. Consequently, the installation process is as straightforward as running the following command:
+
+```bash
+sudo apt -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu-system qemu-kvm virt-manager
+```
+
+We installed QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.17)
+
+Once the installation was complete, we provisioned the guest Virtual Machine with the following hardware specifications:
+
+* **vCPUs:** 2
+* **RAM:** 4 GB
+* **Storage:** 25 GB virtual hard disk
+
+We installed both the 6.18.35 and the 6.18.35-rt5 kernels in the same manner as on the host, with the exception that we did not enable the NVMe block device support, since we will be using VirtIO.
+
+We ensured the VM always had the required resources avaiable and could not be preempted by other tasks by setting the QEMU scheduling mode to `SCHED_FIFO` with priority 99.
+```bash
+pgrep qemu
+sudo chrt -f -a -p 99 [PID]
+```
+
+### Isolating the VM
+While applying the aforementioned isolation technique, we appended specific parameters to the XML configuration to ensure stable and predictable VM behaviour:
 
 1. We applied CPU pinning to make the vCPU threads only run on the isolated cores, while banishing emulator and I/O threads to the general-purpose cores:
 
