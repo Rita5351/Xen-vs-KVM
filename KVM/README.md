@@ -235,3 +235,92 @@ Despite the excellent average case, the analysis of the Worst-Case Execution Tim
 The empirical observation of this execution demonstrates severe latency instability, which is particularly critical given the system's strict configuration. Despite this optimal prioritization, the system still suffered from chronic and significant delays.
 
 These high latencies indicate that the delays are originating from deeper, non-preemptible sources escaping the guest's control. Consequently, this configuration proves that merely applying the maximum scheduler priority is fundamentally insufficient to guarantee the strict, reliable upper bounds required for safety-critical real-time applications.
+
+## ISOLATED STRESS HOST PERFORMANCE ANALYSIS
+
+This section presents a detailed analysis of execution latencies measured within a virtualized environment based on the Kernel-based Virtual Machine (KVM) hypervisor, subjected to a background stress workload but utilizing OS-level isolation strategies. The primary objective is to evaluate whether spatial isolation of the Virtual CPUs (VCPUs) can effectively shield the guest operating system from the severe preemption and scheduling delays induced by host-level contention.
+
+To quantify response times, internal jitter, and the Worst-Case Execution Time (WCET) under these isolated conditions, the `cyclictest` tool was employed through continuous 5-minute executions. The investigation explores the impact on system stability and temporal predictability by cross-referencing four distinct kernel combinations between the underlying Host infrastructure and the Guest virtual machine:
+
+* **Non-Real-Time (NRT) Host and Non-Real-Time (NRT) Guest:** to measure system behavior and virtualization overhead when applying isolation techniques to a standard, unoptimized software stack.
+* **Non-Real-Time (NRT) Host and Real-Time (RT) Guest:** to evaluate the effectiveness of an optimized guest scheduler operating on dedicated cores, while the underlying hypervisor lacks deterministic guarantees.
+* **Real-Time (RT) Host and Non-Real-Time (NRT) Guest:** to analyze the impact of a determinism-optimized host on the preemption spikes of a standard guest when spatial isolation is enforced.
+* **Real-Time (RT) Host and Real-Time (RT) Guest (Full RT Stack):** to observe the maximum level of temporal predictability achievable by combining CPU isolation with an end-to-end `PREEMPT_RT` patched infrastructure.
+
+The analyses in the following paragraphs offer a comprehensive overview of the latency profiles characteristic of each isolated configuration, detailing the effectiveness of core pinning in mitigating the catastrophic failures observed in un-isolated stress scenarios.
+
+![Performance under stress- KVM OS-level isolation ](tests/plot/svg/kvm_backgroundnoise_isolated.svg)
+
+## NON-REAL-TIME HOST AND NON-REAL-TIME GUEST (ISOLATED STRESS HOST)
+
+This section presents an analysis of a single, extended 5-minute `cyclictest` run conducted in an isolated environment, featuring a Non-Real-Time guest Linux kernel hosted on a Non-Real-Time host system under stress. The objective is to establish a performance baseline for spatial isolation without real-time kernel patches.
+
+### Distribution Analysis and Nominal Performance
+
+Analysis of the histogram log reveals a very consistent nominal execution under isolated stress. The statistical mode (the most frequent latency value) was anchored firmly at 8 µs. The average latency was highly stable, measuring exactly 11 µs across the entire continuous execution. Additionally, the minimum recorded latency dropped to 6 µs. This indicates that CPU isolation successfully protects the active VCPU during standard execution cycles, keeping the baseline virtualization overhead low despite the background load on the host.
+
+### Worst-Case Execution Time (WCET) and Lack of Determinism
+
+While isolation drastically improved the overall stability compared to un-isolated stress tests (which saw 44-millisecond delays), the Worst-Case Execution Time (WCET) data reveals that determinism is not fully guaranteed. The absolute maximum latency recorded was bounded at 2,024 µs (roughly 2 milliseconds). However, the system still registered 19 histogram overflows (latencies exceeding the 1000 µs threshold).
+
+### Conclusions on Standard Isolated Environments
+
+The application of CPU isolation prevents the catastrophic multi-millisecond starvation seen in standard stress scenarios, reducing the WCET by over 95%. However, the presence of nearly 2-millisecond spikes and 19 overflows confirms that a general-purpose NRT/NRT stack remains susceptible to unpredictable delays. Because the tasks cannot be preempted by standard user-space processes (due to the FIFO=99 scheduling policy), these spikes originate from deeper, non-preemptible sources such as host kernel lockups, unmaskable hardware interrupts, or shared hardware resource contention (like cache and memory bus) induced by the stress load running on neighboring cores.
+
+## NON-REAL-TIME HOST AND REAL-TIME GUEST (ISOLATED STRESS HOST)
+
+This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a hybrid environment, configured with a Real-Time optimized guest hosted on a Standard Linux Kernel Host, with CPU isolation applied during host stress.
+
+### Nominal Performance and Average Latency
+
+The data collected confirms that the isolated RT guest achieves excellent baseline efficiency. The average latency value rested at 12 µs, with the statistical mode concentrated at 9 µs. Furthermore, the absolute minimum latency reached an impressive 4 µs, indicating that the optimized guest scheduler, when isolated, dispatches tasks with extreme speed under nominal conditions.
+
+### Worst-Case Execution Time (WCET) Analysis
+
+The analysis of the Worst-Case Execution Time (WCET) reveals a massive improvement over the un-isolated equivalent (which previously failed catastrophically with 51-millisecond delays). With isolation, the absolute maximum latency recorded was capped at 2,299 µs. However, the system still experienced 11 histogram overflows over the 1-millisecond threshold.
+
+### Conclusions on the Hybrid Isolated Environment
+
+The empirical observation of this test demonstrates that isolating the VCPUs successfully shields the RT Guest from the chaotic preemption of the NRT Host's stress workload. Yet, the 2.3-millisecond peak and the 11 overflows indicate a lack of strict determinism. Since the internal guest tasks are running at maximum real-time priority, the remaining latency spikes must be attributed to the NRT host infrastructure. The underlying standard hypervisor still introduces non-deferrable interrupts or unpredictable virtualization overhead that occasionally stalls the isolated cores, proving that guest-side optimization alone is insufficient.
+
+## REAL-TIME HOST AND NON-REAL-TIME GUEST (ISOLATED STRESS HOST)
+
+This section examines the prolonged execution of the `cyclictest` tool in a hybrid environment featuring a Standard Linux Guest hosted on a Real-Time `PREEMPT_RT` patched Host, operating under isolated stress conditions.
+
+### Nominal Performance and Average Latency
+
+The nominal performance metrics indicate a highly stable execution path. The average latency metric was maintained at 13 µs, and the statistical mode was heavily concentrated at 9 µs. The absolute minimum latency recorded was 6 µs. This confirms that the RT Host efficiently manages the isolated VCPUs, providing a steady execution foundation.
+
+### Worst-Case Execution Time (WCET) Analysis
+
+The Worst-Case Execution Time (WCET) analysis shows the lowest peak latency among the hybrid configurations. The absolute maximum latency recorded reached 1,502 µs (approximately 1.5 milliseconds). Despite this tighter upper bound, the system still accumulated 16 histogram overflows during the 5-minute sustained test.
+
+### Conclusions on the Hybrid Isolated Environment
+
+Optimizing the Host OS with a `PREEMPT_RT` kernel, combined with CPU isolation, yielded a highly robust infrastructure that successfully limited the maximum delay to 1.5 milliseconds under heavy stress. However, the 16 recorded overflows demonstrate that the NRT Guest remains a bottleneck. Unoptimized internal locks and non-preemptible critical sections within the general-purpose guest kernel still generate periodic stalls, preventing the system from achieving hard real-time determinism despite the stable host infrastructure.
+
+## REAL-TIME HOST AND REAL-TIME GUEST (FULL RT STACK - ISOLATED STRESS HOST)
+
+This section analyzes the results obtained from the `cyclictest` execution in a "Full RT" environment, where a `PREEMPT_RT` patched Linux guest kernel is hosted on a Real-Time optimized Host, with spatial isolation applied during the stress workload. The objective is to evaluate the absolute limits of temporal predictability in a fully tuned KVM stack.
+
+### Distribution Analysis and Nominal Performance
+
+The experimental data highlights unparalleled efficiency in the best-case and nominal scenarios. The statistical mode was anchored at 9 µs, and the average latency was highly stable at 13 µs. Most notably, the absolute minimum latency recorded was an exceptional 3 µs—the lowest value observed across all configurations. This demonstrates that when the full RT stack operates unimpeded on isolated cores, the internal jitter and virtualization overhead are practically negligible.
+
+### Worst-Case Execution Time (WCET) Analysis
+
+Despite the optimal software stack and spatial isolation, the Worst-Case Execution Time (WCET) analysis reveals that strict hard real-time bounds are still compromised under stress. The absolute maximum latency was recorded at 1,935 µs (nearly 1.9 milliseconds), and the system experienced 14 histogram overflows over the 1000 µs tracking threshold.
+
+### Conclusions on the Full RT Isolated Architecture
+
+The empirical observation of this execution provides critical insight into the limits of virtualization determinism. Combining a Full RT stack with CPU isolation successfully mitigated the severe, multi-millisecond starvation caused by host stress, keeping the WCET under 2 milliseconds. However, the persistence of 14 overflows and a 1.9-millisecond peak proves that strict determinism is not perfectly guaranteed.
+
+---
+
+Following the detailed analysis of each individual scenario, the table below provides a consolidated overview of the Worst-Case Execution Time (WCET) measurements. It allows for a direct comparison across all four task configurations (**NRT-NRT**, **NRT-RT**, **RT-NRT**, and **RT-RT**) under the three tested conditions: standard execution (**BASELINE**), heavy system load (**STRESSHOST**), and load with isolation mechanisms applied (**STRESSHOST ISOLATED**).
+
+| Configurazione | NRT-NRT | NRT-RT | RT-NRT | RT-RT |
+|---|---|---|---|---|
+| **BASELINE** | 602 | 6114 | 93 | 81 |
+| **STRESSHOST** | 44409 | 51069 | 50257 | 9829 |
+| **STRESSHOST ISOLATED** | 2024 | 2299 | 1502 | 1935 |

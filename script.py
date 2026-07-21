@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 # Sostituisci il nome del file se necessario
 
 # Test senza stress
-test_classes = [Path('KVM/tests/results_nrt_nrt_stresshost.log'),
-                Path('KVM/tests/results_nrt_rt_stresshost.log'),
-                Path('KVM/tests/results_rt_nrt_stresshost.log'),
-                Path('KVM/tests/results_rt_rt_stresshost.log')]
+test_classes = [Path('KVM/tests/results_nrt_nrt_stresshost_isolated.log'),
+                Path('KVM/tests/results_nrt_rt_stresshost_isolated.log'),
+                Path('KVM/tests/results_rt_nrt_stresshost_isolated.log'),
+                Path('KVM/tests/results_rt_rt_stresshost_isolated.log')]
 
 # Test con stress (verifica che l'estensione finale sia corretta)
 # test_classes = [Path('KVM/tests/results_nrt_nrt_stresshost.log'),
