@@ -96,6 +96,19 @@ sudo reboot
 
 After the system boots, it will wait 30 seconds and then run the test for exactly 5 minutes. At the end of the process, the results will be available in `/var/log/cyclictest_results/results_hist.log`, the service will automatically disable itself, and the system will remain stably booted on the set kernel.
 
+## BASELINE PERFORMANCE ANALYSIS IN KVM ENVIRONMENTS
+
+This section presents a detailed analysis of execution latencies measured within a virtualized environment based on the Kernel-based Virtual Machine (KVM) hypervisor. The primary objective is to establish a performance baseline and evaluate the system's behavior, determinism, and virtualization overhead under standard scheduling policies before introducing more advanced or restrictive tuning configurations.
+
+To quantify response times, internal jitter, and the Worst-Case Execution Time (WCET), the `cyclictest` tool was employed through continuous 5-minute baseline executions. The investigation explores the impact on system stability and temporal predictability by cross-referencing four distinct kernel combinations between the underlying Host infrastructure and the Guest virtual machine:
+
+* **Non-Real-Time (NRT) Host and Non-Real-Time (NRT) Guest:** to measure standard system behavior and baseline virtualization overhead in the total absence of real-time optimizations.
+* **Non-Real-Time (NRT) Host and Real-Time (RT) Guest:** to evaluate the effectiveness of internal scheduling optimizations within the guest when the underlying hypervisor lacks deterministic guarantees.
+* **Real-Time (RT) Host and Non-Real-Time (NRT) Guest:** to analyze the impact of a determinism-optimized host on the performance, preemption spikes, and overall execution stability of a standard, general-purpose guest.
+* **Real-Time (RT) Host and Real-Time (RT) Guest (Full RT Stack):** to observe the maximum level of temporal predictability achievable by aligning both the host infrastructure and the guest operating system with the `PREEMPT_RT` patch.
+
+The analyses in the following paragraphs offer a comprehensive overview of the latency profiles characteristic of each configuration, detailing the limitations of general-purpose environments and validating the effectiveness of an end-to-end real-time stack for mitigating virtualization overhead.
+
 ![Baseline Performance - KVM ](tests/plot/svg/kvm_nonoise.svg)
 
 ## NON-REAL-TIME HOST AND NON-REAL-TIME GUEST
@@ -155,4 +168,70 @@ The empirical observation of this sustained test provides conclusive evidence re
 *   **Zero Overflows:** The complete absence of histogram overflows confirms that the system never experienced uncontrolled latency spikes during the prolonged execution.
 *   **Viability for Critical Systems:** This "Full RT" configuration establishes a highly predictable WCET, proving that with proper infrastructure tuning, virtualized environments can reliably support safety-critical control applications that previously required dedicated bare-metal hardware.
 
+## Impact of the Stress Workload on Latencies
 
+To evaluate system robustness and trigger potentially higher latencies, the testing methodology involves introducing an additional load, defined as a "stress workload." In the case of the KVM hypervisor, this stress workload is executed in the background directly on the Host operating system, simulating heavy external contention that competes for CPU time and system resources.
+
+Experimental analysis of the KVM infrastructure reveals that adding this background load produces severe performance degradation across the board. Unlike the complex, configuration-dependent behaviors observed in other hypervisors, the stress workload on KVM exposes fundamental architectural vulnerabilities in maintaining determinism:
+
+* **Catastrophic Failure in Unoptimized and Hybrid Stacks:** Introducing host-level stress immediately shatters the determinism of standard and hybrid configurations. Whether using a fully Non-Real-Time (NRT) stack or attempting partial optimization (an RT Guest on an NRT Host, or an NRT Guest on an RT Host), the system experiences catastrophic scheduling delays. Maximum latencies in these configurations routinely spike between 44 and 51 milliseconds, indicating massive host-induced starvation and lock contention.
+* **The Illusion of Guest-Only Optimization:** Counter-intuitively, equipping the Guest with a Real-Time kernel while the Host remains NRT yielded the highest variability and the worst absolute latency spikes (over 51 milliseconds) of the dataset. This proves that an optimized guest scheduler is entirely powerless to protect time-sensitive threads if the underlying Host hypervisor is vulnerable to non-deterministic preemption.
+* **Chronic Instability of the Full RT Stack:** Even when utilizing an end-to-end "Full RT" stack (RT Host and RT Guest) with optimal prioritization parameters, the KVM environment fails to guarantee strict real-time bounds under stress. While the Full RT stack successfully suppresses the catastrophic 50-millisecond delays (bounding the absolute maximum latency to approximately 9.8 milliseconds), it suffers from a massive frequency of significant scheduling stalls, evidenced by hundreds of over-millisecond latency overflows.
+
+In this section, we will present the detailed experiments conducted under these stress conditions and analyze the resulting execution logs.
+
+![Performance under stress workload- KVM at maximum priority](tests/plot/svg/kvm_backgroundnoise.svg)
+
+## NON REAL-TIME HOST AND NON REAL-TIME GUEST -STRESS HOST
+
+This section presents an analysis of the first `cyclictest` execution log conducted on a KVM host under stress conditions. The objective is to evaluate the system's scheduling behavior and latency bounds when subjected to external load.
+
+### Distribution Analysis and Nominal Performance
+Analysis of the histogram log reveals that the system maintains a reasonable baseline under stress. Over the test duration, the average latency recorded was 13 µs. The statistical mode (the most frequent latency) was concentrated at 14 µs, with a significant number of cycles also completing at 13 µs. The absolute minimum recorded latency dropped to an impressive 5 µs. This indicates that when the CPU is not actively dealing with stress-induced contention, the base virtualization and scheduling overhead remains low.
+
+### Worst-Case Execution Time (WCET) and Lack of Determinism
+The impact of the stress workload becomes severely apparent when analyzing the Worst-Case Execution Time (WCET). The absolute maximum latency recorded during this run was an extreme 44,409 µs (over 44 milliseconds). Furthermore, the log reports 11 histogram overflows (latencies exceeding the 1000 µs tracking threshold). 
+
+### Conclusions
+The presence of 44-millisecond latency spikes clearly demonstrates that this environment lacks determinism. Under stress, the host OS experiences massive scheduling delays, likely due to lock contention, non-preemptible critical sections, or starvation of the test threads. This configuration cannot guarantee the strict upper bounds required for real-time applications.
+
+## NON REAL-TIME HOST AND REAL-TIME GUEST -STRESS HOST
+
+This section analyzes the results obtained from the second `cyclictest` execution, also run under stressed conditions on the KVM host infrastructure. 
+
+### Nominal Performance and Average Latency
+The nominal performance mirrors the first log closely, confirming a consistent baseline efficiency even under load. The average latency was precisely 13 µs, and the minimum latency was 5 µs. Interestingly, the distribution shows a dual-peak behavior, with the highest concentration at 13 µs (the mode), but with another massive spike of cycles completing at 7 µs.
+
+### Worst-Case Execution Time (WCET) Analysis
+This specific execution experienced the highest variability and worst latency spikes of the entire dataset. The absolute maximum latency reached an exorbitant 51,069 µs (over 51 milliseconds). The severity of the instability is further highlighted by the 26 histogram overflows, more than double the number seen in the first log. 
+
+### Conclusions 
+The empirical observation of this run conclusively shows that the stress workload induces chaotic, non-deterministic preemption. A 51-millisecond delay represents a catastrophic failure for any safety-critical system. The KVM host in this state is entirely unsuitable for bounded real-time execution, as the scheduler cannot adequately protect time-sensitive threads from background stress.
+
+## REAL-TIME HOST AND NON REAL-TIME GUEST -STRESS HOST
+
+This section examines the third prolonged execution of the `cyclictest` tool on the stressed KVM host environment, validating the patterns observed in previous iterations.
+
+### Nominal Performance and Average Latency
+The data collected confirms a stable nominal execution path. The average latency metric remained locked at 13 µs, while the minimum latency reached the lowest point among the first three runs, hitting 3 µs. The histogram shows a massive concentration of execution cycles completing in exactly 13 µs, indicating that when the scheduler is unimpeded, it processes tasks with high consistency.
+
+### Worst-Case Execution Time (WCET) Analysis
+Despite the strong nominal performance, the WCET remains unacceptable for real-time standards. The maximum latency peaked at 50,257 µs (over 50 milliseconds). The system registered 11 histogram overflows, indicating multiple occurrences of severe scheduling stalls exceeding one millisecond.
+
+### Conclusions
+This run confirms that while the system can occasionally achieve extremely fast task dispatching (3 µs min), it is completely vulnerable to unpredictable, systemic delays. The 50-millisecond peak re-emphasizes that background stress can effectively starve tasks for dozens of milliseconds, a fatal condition for latency-sensitive applications.
+
+## REAL-TIME HOST AND REAL-TIME GUEST -STRESS HOST
+
+This section presents an analysis of the provided `cyclictest` execution log conducted on a KVM environment under stress conditions. The objective is to evaluate the system's scheduling determinism and latency bounds when subjected to external load.
+
+### Distribution Analysis and Nominal Performance
+Analysis of the histogram log reveals a highly efficient baseline performance under nominal execution. The statistical mode (the most frequent latency) is sharply concentrated at 7 µs, representing over 1.7 million completed cycles. The average latency metric is remarkably stable at 11 µs, and the absolute minimum recorded latency is exceptionally low at 4 µs. This indicates that most of the time, the virtualization overhead is minimal.
+
+### Worst-Case Execution Time (WCET) Analysis
+Despite the excellent average case, the analysis of the Worst-Case Execution Time (WCET) reveals severe scheduling instability induced by the stress workload. The absolute maximum latency recorded reached 9,829 µs (nearly 9.8 milliseconds). Even more critically, the log reports an overwhelming 283 histogram overflows (latencies exceeding the 1000 µs tracking threshold). This represents a massive frequency of significant scheduling stalls compared to typical runs.
+
+### Conclusions
+The empirical observation of this execution demonstrates severe latency instability, which is particularly critical given the system's strict configuration. Despite this optimal prioritization, the system still suffered from chronic and significant delays.
+
+These high latencies indicate that the delays are originating from deeper, non-preemptible sources escaping the guest's control. Consequently, this configuration proves that merely applying the maximum scheduler priority is fundamentally insufficient to guarantee the strict, reliable upper bounds required for safety-critical real-time applications.
