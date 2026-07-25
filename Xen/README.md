@@ -331,45 +331,262 @@ This behavior indicates that modern Xen HVM implementations successfully decoupl
 ![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise_maxprioqemu.svg)
 
 ## TACLe Benchmark
-Questa sezione della documentazione illustra il razionale dietro la selezione dei benchmark estratti dalla suite **TACLeBench** versione 1.9 e la metodologia adottata per la loro esecuzione all'interno della nostra architettura. L'obiettivo è fornire un carico di lavoro eterogeneo per validare accuratamente le latenze di esecuzione e la stabilità delle performance in ambienti con rigidi requisiti real-time.
 
-## 1. Selezione dei Benchmark
-Abbiamo selezionato un programma rappresentativo per ciascuna delle categorie principali di TACLeBench, garantendo una copertura ottimale dei diversi pattern di esecuzione.
+This section of the documentation illustrates the rationale behind the selection of the benchmarks extracted from the **TACLeBench** version 1.9 suite and the methodology adopted for their execution within our architecture. The goal is to provide a heterogeneous workload to accurately validate execution latencies and performance stability in environments with strict real-time requirements.
 
-*   **Kernel Benchmark (`matrix1`):** Isola le porzioni di codice computazionalmente più intensive per valutare le performance pure della CPU e l'efficienza della cache.
-*   **Sequential Benchmark (`huff_enc`):** Valuta l'elaborazione sequenziale e i pattern di accesso alla memoria. La compressione dati (325 SLOC, David Bourgin) è eccellente per misurare le variazioni di latenza in esecuzione a singolo thread.
-*   **Test Benchmark (`test3`):** Uno stress test artificiale per l'analisi WCET (Worst-Case Execution Time, 4235 SLOC, Universität des Saarlandes). Spinge al limite il motore di esecuzione per misurare i margini di sicurezza temporale e la robustezza del sistema.
-*   **Parallel Benchmark (`Debie`):** Strumento di osservazione aerospaziale (6615 SLOC, Tidorum Ltd) composto da 8 task. Essenziale per testare i meccanismi di sincronizzazione e la preemption in scenari multi-tasking.
-*   **Application Benchmark (`lift`):** Un controller per ascensori (361 SLOC, Martin Schoeberl). Verifica che le metriche di latenza dei test sintetici garantiscano stabilità in una vera applicazione di controllo cyber-fisico.
+## 1. Benchmark Selection
 
-## 2. Metodologia di Esecuzione e Scenari di Test
+We selected a representative program for each of the main TACLeBench categories, ensuring optimal coverage of the different execution patterns.
 
-Per analizzare in modo rigoroso il comportamento del sistema e l'impatto dell'architettura di virtualizzazione, **tutti e 5 i benchmark selezionati sono stati eseguiti su un kernel LL-RT (Low-Latency Real-Time)**. 
+* **Kernel Benchmark (`matrix1`):** Isolates the most computationally intensive portions of code to evaluate raw CPU performance and cache efficiency.
+* **Sequential Benchmark (`huff_enc`):** Evaluates sequential processing and memory access patterns. Data compression (325 SLOC, David Bourgin) is excellent for measuring latency variations in single-threaded execution.
+* **Test Benchmark (`test3`):** An artificial stress test for WCET (Worst-Case Execution Time, 4235 SLOC, Universität des Saarlandes) analysis. It pushes the execution engine to its limits to measure time safety margins and system robustness.
+* **Parallel Benchmark (`Debie`):** Aerospace observation tool (6615 SLOC, Tidorum Ltd) consisting of 8 tasks. Essential for testing synchronization mechanisms and preemption in multi-tasking scenarios.
+* **Application Benchmark (`lift`):** An elevator controller (361 SLOC, Martin Schoeberl). Verifies that the latency metrics from synthetic tests guarantee stability in a real cyber-physical control application.
 
-Per ciascun benchmark, abbiamo definito una matrice di test composta da quattro scenari operativi. In tutte le configurazioni di base, al **Dom0 sono state assegnate 20 vCPUs**. Le variabili analizzate riguardano l'applicazione del pinning delle vCPU (fondamentale per evitare le migrazioni di contesto e stabilizzare le latenze) e l'introduzione di un carico di stress (rumore) proveniente da un altro DomU.
+## 2. Execution Methodology and Test Scenarios
 
-Di seguito vengono riportati i comandi esatti utilizzati per l'esecuzione, prendendo come esempio di riferimento il benchmark sequenziale `huff_enc`. La medesima struttura di test è stata applicata a tutti gli altri programmi della suite.
+To rigorously analyze the system's behavior and the impact of the virtualization architecture, **all 5 selected benchmarks were executed on the LL-RT (Low-Latency Dom0, Real-Time DomU) configuration**.
 
-### Scenario A: Senza pinning, senza rumore del DomU
-Questa configurazione rappresenta l'esecuzione baseline assoluta del sistema. Il carico di lavoro viene eseguito senza applicare alcun vincolo di affinità restrittivo (pinning) per le vCPU, lasciando allo scheduler dell'hypervisor la totale libertà di allocare e migrare i thread sulle risorse fisiche disponibili. In assenza di interferenze esterne o carichi concorrenti provenienti da altri domini, questo scenario ci permette di isolare e misurare l'overhead intrinseco introdotto dalle sole meccaniche di scheduling e dalle migrazioni di contesto "naturali", fornendo un punto di partenza fondamentale per tutte le valutazioni successive.
+For each benchmark, we defined a test matrix composed of four operational scenarios. In all baseline configurations, **4 vCPUs were assigned to Dom0**. The analyzed variables concern the introduction of a stress load (noise) of varying size originating from another DomU and the application of vCPU pinning (crucial for avoiding context migrations and stabilizing latencies).
+
+To ensure strict real-time conditions and accurate latency measurements, the execution procedure was carefully standardized across all test scenarios. The process involved specific compilation flags, scheduler modifications, and rigid execution parameters designed to eliminate typical operating system interference.
+
+**Compilation and Preparation**
+Each of the benchmarks were modified to support automatically changing scheduling priority and repeated executions (the source code is available in this repository). We then compiled them using `-O2` optimizations and linked with the necessary POSIX real-time and threading libraries:
+
 ```bash
-sudo ./huff_enc --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 -q > ./results/results_tacle_huffenc_nopin.log
+gcc -O2 -o test3 test3.c -lpthread -lrt
+
 ```
 
-### Scenario B: Senza pinning, con rumore del DomU
-Questo scenario introduce la problematica del "noisy neighbor" (vicino rumoroso) all'interno di un ambiente di esecuzione non vincolato. L'obiettivo è analizzare in modo approfondito l'impatto dell'interferenza generata da un dominio guest attivo (DomU) sulle prestazioni di un altro DomU. Mantenendo il sistema di scheduling completamente libero di allocare e riposizionare dinamicamente le vCPU, andiamo a valutare come la competizione per le risorse condivise degradi i tempi di risposta. Questo test ci permette di osservare il comportamento del sistema quando tenta di bilanciare i carichi in presenza di alta contesa, evidenziando la potenziale instabilità e le latenze aggiuntive causate dai continui context switch.
+**Benchmark Execution Parameters**
+The TACLe benchmarks were executed via the command line with a strict set of arguments to maintain deterministic behavior. The fundamental flags applied across the tests included:
+
+* `--mlockall`: Locks the process's memory pages directly into RAM, preventing any unpredictable latency spikes caused by page faults or disk swapping.
+* `--priority=99`: Enforces the highest real-time priority internally for the benchmark's execution thread.
+* `--affinity=1`: Applies CPU pinning, locking the execution strictly to CPU core 1. This is a critical step to prevent costly context migrations across different processor cores.
+
+Below are the exact execution commands utilized for the targeted benchmarks:
+
 ```bash
-sudo ./huff_enc --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 -q > ./results/results_tacle_huffenc_nopin_stressdomU.log
+# Executing test3 (pseudo-cyclictest) for 10,000 loops and outputting a latency histogram
+sudo ./test3 --mlockall --priority=99 --affinity=1 --loops=10000 --histogram=1000000 --histfile=results/results_test3_baseline.log
 ```
 
-### Scenario C: Con pinning, senza rumore del DomU
-Esecuzione ottimizzata che isola il carico di lavoro vincolandolo a vCPU specifiche tramite pinning, in stretta assenza di interferenze esterne. Questo scenario definisce la baseline di riferimento ideale: stabilendo le prestazioni ottimali in condizioni di totale isolamento, ci fornisce il metro di paragone necessario per valutare l'efficacia del partizionamento dell'hypervisor. Ci permette, nei test successivi, di misurare esattamente se e in che modo il rumore generato all'interno di un DomU riesca a superare le barriere di isolamento e impattare le performance di un altro dominio.
+**Noise Generation Strategy**
+To evaluate the architectural robustness and jitter expansion during the noisy scenarios, interference was artificially injected into the system. This was achieved using `stress-ng` to spawn multiple aggressive workers, intentionally taxing the CPU cores and the virtual memory subsystem to simulate severe cache thrashing and scheduling pressure:
+
 ```bash
-sudo ./huff_enc --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 -q > ./results/results_tacle_huffenc_pin.log
+stress-ng --cpu 16 --vm 16 --vm-bytes 1G --timeout 10m
+
 ```
 
-### Scenario D: Con pinning, con rumore del DomU
-Questo scenario rappresenta il caso di test cruciale per valutare l'efficacia dell'isolamento fornito dall'hypervisor. L'obiettivo è analizzare il comportamento effettivo del sistema per misurare come e quanto il rumore generato in modo concorrente all'interno di un DomU impatti le prestazioni di un altro dominio. Ci permette di verificare se, pur applicando il pinning delle vCPU per vincolare le risorse, le interferenze (come la contesa per la cache condivisa o il bus di memoria) riescano a propagarsi tra i domini, degradando la stabilità e la predicibilità temporale del carico di lavoro.
-```bash
-sudo ./huff_enc --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 -q > ./results/results_tacle_huffenc_pin_stressdomU.log
-```
+**Domain configuration**
+To clearly understand the extent of the interference of a different DomU stress workload on the critical guest, we designed two test scenarios:
+
+* **Small Noise**: a small DomU with just 2 vCPUs and 4 GB of RAM. This would introduce a small amount of noise, thus testing if at least some isolation is provided.
+* **Big Noise**: a more beefy DomU configuration with 16 vCPUs and 16 GB of RAM. In this case, the interference introduced is more severe, pushing the limits of the isolation mechanism.
+* **Big Noise with pinning**: the same of the previous setup but with added static vCPU pinning. This would determine how much the scheduling algorithm affects the isolation of the domains.
+
+## TACLeBench Baseline Execution Analysis
+
+Establishing this baseline is a critical first step for comparing the determinism and worst-case execution time (WCET) latencies, a Type 1 hypervisor utilizing Dom0 and DomU architectures. The following analysis evaluates the raw execution logs to quantify system determinism before introducing vCPU pinning.
+
+### Baseline Latency Summary
+
+| Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
+| --- | --- | --- | --- | --- | --- |
+| **DEBIE** | 10,000 | 23,921 | 27,175 | 31,048 | 7,127 μs |
+| **huffenc** | 1,000,000 | 15 | 16 | 35 | 20 μs |
+| **lift** | 1,000,000 | 19 | 19 | 85 | 66 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 9 | 9 μs |
+| **test3** | 10,000 | 8,286 | 8,328 | 8,414 | 128 μs |
+
+### Workload-Specific Behavior
+
+**DEBIE**
+
+* The DEBIE benchmark represents the heaviest and most unpredictable workload in the dataset, with a massive spread between the minimum (23,921 µs) and maximum (31,048 µs) execution times.
+* The absolute jitter of over 7 milliseconds indicates significant preemption, cache misses, or scheduling overhead during execution.
+* This high variability makes DEBIE an excellent candidate for stress-testing how well future DomU or virtualized configurations handle long-running, computationally complex real-time tasks.
+
+**Huffenc**
+
+* The `huffenc` benchmark represents a short-lived task executed 1,000,000 times.
+* It shows excellent stability with an average latency of 16 µs and a worst-case peak of 35 µs.
+* The absolute jitter is strictly bounded at 20 µs, derived from a minimum latency of 15 µs.
+
+**Lift**
+
+* The `lift` benchmark exhibits highly deterministic behavior on this baseline, with the average latency (19 µs) sitting exactly on the minimum latency (19 µs) across one million loops.
+* The maximum latency peak of 85 µs represents a rare outlier.
+* The vast majority of executions cluster tightly at 19-20 µs, showing that the unisolated baseline scheduler handles this specific workload with high predictability.
+
+**Matrix1**
+
+* The `matrix1` execution is extremely lightweight, registering a 0 µs average latency, which indicates that standard execution times fall below the microsecond resolution threshold of the testing configuration.
+* The absolute worst-case execution time caps at just 9 µs.
+* Because this benchmark is practically instantaneous, it is almost entirely cache-bound and will be highly sensitive to hypervisor memory management disruptions.
+
+**Test3**
+
+* The `test3` benchmark represents a heavier execution profile containing 10,000 loops, an average latency of 8,328 µs, and a maximum of 8,414 µs.
+* The tighter jitter (128 µs) relative to its extended execution time suggests a steady computational loop that is less affected by micro-interruptions compared to the highly variable DEBIE benchmark.
+
+### Real-Time Systems Assessment
+
+This baseline demonstrates a standard, unisolated environment where lightweight tasks (`matrix1`, `lift`, `huffenc`) execute with near-perfect determinism, while heavier tasks (`DEBIE`) suffer from severe scheduling jitter. The outliers observed in `lift` (85 µs) and `huffenc` (35 µs) are the specific OS noise artifacts that isolation mechanisms aim to eliminate. When transferring these workloads to virtualized setups, tracking the expansion of these maximum latency tails will directly quantify the scheduling interference introduced by the virtualization layer.
+
+## TACLeBench Small Noise Execution Analysis
+
+This phase of testing evaluates the determinism and worst-case execution time (WCET) latencies of KVM and Xen (a Type 1 hypervisor utilizing Dom0 and DomU architectures) under a "Small Noise" configuration. The following analysis interprets the execution logs to quantify how minor system disturbances impact the predictability of the hypervisor scheduling.
+
+### Small Noise Latency Summary
+
+| Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
+| --- | --- | --- | --- | --- | --- |
+| **DEBIE** | 10,000 | 23,873 | 27,118 | 31,022 | 7,149 μs |
+| **huffenc** | 1,000,000 | 15 | 16 | 35 | 20 μs |
+| **lift** | 1,000,000 | 19 | 19 | 36 | 17 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 8 | 8 μs |
+| **test3** | 10,000 | 8,286 | 8,331 | 8,885 | 599 μs |
+
+### Workload-Specific Behavior
+
+**DEBIE**
+
+* The DEBIE benchmark remains the heaviest workload, with execution times ranging from a minimum of 23,873 µs to a maximum of 31,022 µs.
+* The absolute jitter sits at 7,149 µs, confirming its high sensitivity to preemption and scheduling overhead even in a small noise environment.
+
+**Huffenc**
+
+* The `huffenc` benchmark shows excellent stability across 1,000,000 iterations.
+* With an average latency of 16 µs and a worst-case peak of 35 µs, the absolute jitter remains tightly bounded at 20 µs.
+
+**Lift**
+
+* Under the small noise configuration, the `lift` benchmark exhibits highly deterministic behavior, maintaining an average latency of 19 µs.
+* The maximum latency peak is only 36 µs, representing a noticeably tighter jitter (17 µs) compared to the unisolated baseline.
+
+**Matrix1**
+
+* The `matrix1` execution remains extremely lightweight and cache-bound, registering a 0 µs average latency.
+* The absolute worst-case execution time is capped at an exceptionally low 8 µs.
+
+**Test3**
+
+* The `test3` benchmark executed 10,000 loops with an average latency of 8,331 µs.
+* The maximum latency reached 8,885 µs, pushing the absolute jitter to 599 µs. The jitter expansion here is heavily influenced by specific micro-interruptions captured during the run.
+
+### Real-Time Systems Assessment
+
+Evaluating the small noise scenario reveals that lightweight and highly repetitive tasks (`matrix1`, `lift`, `huffenc`) can maintain extreme determinism, with jitter boundaries narrowing significantly (such as `lift` dropping to a 36 µs max peak). Heavier workloads like `DEBIE` continue to exhibit substantial variance. 
+
+## TACLeBench Big Noise Execution Analysis
+
+This phase of the evaluation investigates the determinism and worst-case execution time (WCET) latencies of a Xen DomU in the presence of another, big-sized DomU affected by significant stress workload. The following analysis examines the execution logs to quantify how significant system disturbances and heavy background noise degrade the predictability of the scheduler prior to applying isolation techniques.
+
+### Big Noise Latency Summary
+
+| Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
+| --- | --- | --- | --- | --- | --- |
+| **DEBIE** | 10,000 | 24,627 | 28,196 | 57,314 | 32,687 μs |
+| **huffenc** | 1,000,000 | 15 | 19 | 182 | 167 μs |
+| **lift** | 1,000,000 | 17 | 20 | 142 | 125 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 45 | 45 μs |
+| **test3** | 10,000 | 8,287 | 9,182 | 14,786 | 6,499 μs |
+
+### Workload-Specific Behavior
+
+**DEBIE**
+
+* Under heavy noise, the DEBIE benchmark suffers massive scheduling disruptions, pushing the worst-case execution time to 57,314 µs.
+
+* The absolute jitter explodes to 32,687 µs, meaning the variance in execution time is larger than the minimum latency itself (24,627 µs).
+
+**Huffenc**
+
+* While the `huffenc` task maintains a relatively stable average latency of 19 µs, the maximum latency spikes dramatically to 182 µs.
+
+* This results in an absolute jitter of 167 µs, showing that even high-frequency, short-lived tasks are heavily preempted in a noisy environment.
+
+**Lift**
+
+* The `lift` benchmark's determinism breaks down under the big noise configuration, expanding to a maximum latency of 142 µs.
+
+* Compared to previous baselines, the average latency rises slightly to 20 µs, but the 125 µs absolute jitter indicates substantial scheduling delays.
+
+**Matrix1**
+
+* Although the average latency remains at 0 µs due to the task's cache-bound, lightweight nature, the maximum latency expands to 45 µs.
+
+* An absolute jitter of 45 µs on a task that typically executes instantaneously highlights severe micro-interruptions and cache thrashing induced by the noise.
+
+**Test3**
+
+* The `test3` benchmark registers an average latency of 9,182 µs and a severe worst-case peak of 14,786 µs.
+
+* The absolute jitter jumps to 6,499 µs, derived from a minimum execution time of 8,287 µs, proving that medium-weight computational loops cannot maintain steady execution states when sharing unisolated CPU resources with heavy noise.
+
+### Real-Time Systems Assessment
+
+The results of these tests effectively demonstrates the catastrophic loss of determinism across all workloads while the system is under stress because of another DomU. Even ultra-lightweight tasks like `matrix1` and `lift` experience significant latency spikes, while heavy tasks like `DEBIE` become entirely unpredictable. This demostrates the ineffectiveness of the isolation boundaries of the native Xen architecture.
+
+## TACLeBench Big Noise Pinned Execution Analysis
+
+This phase of the evaluation investigates the determinism and worst-case execution time (WCET) latencies of a Xen DomU in the presence of another, big-sized DomU affected by significant stress workload. Because of the poor performance of the unpinned configuration, exhibiting excessively high latencies, CPU pinning was introduced to restrain the interference. The following analysis examines the execution logs to quantify how this pinning mitigates system disturbances.
+
+### Big Noise Pinned Latency Summary
+
+| Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
+| --- | --- | --- | --- | --- | --- |
+| **DEBIE** | 10,000 | 24,034 | 27,274 | 41,266 | 17,232 μs |
+| **huffenc** | 1,000,000 | 15 | 16 | 42 | 27 μs |
+| **lift** | 1,000,000 | 19 | 19 | 43 | 24 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 11 | 11 μs |
+| **test3** | 10,000 | 8,632 | 8,701 | 10,037 | 1,405 μs |
+
+### Workload-Specific Behavior
+
+**DEBIE**
+
+* The DEBIE benchmark ranges from a minimum of 24,034 µs to a maximum of 41,266 µs.
+* Pinning the execution restrains the absolute jitter to 17,232 µs, which is a massive improvement over the unpinned big noise scenario, though it remains sensitive to preemption.
+
+**Huffenc**
+
+* The `huffenc` task executes with an average latency of 16 µs and a peak maximum latency of 42 µs.
+* CPU pinning effectively bounds the absolute jitter at 27 µs, restoring a high degree of stability to this lightweight loop.
+
+**Lift**
+
+* Under the pinned configuration, the `lift` benchmark regains strict determinism, maintaining an average latency of 19 µs.
+* The maximum latency reaches only 43 µs, yielding a tight absolute jitter of 24 µs.
+
+**Matrix1**
+
+* The `matrix1` execution is almost perfectly insulated by the pinning, maintaining a 0 µs average latency and an absolute worst-case execution time of just 11 µs.
+* This 11 µs absolute jitter confirms that cache thrashing and severe scheduling interruptions are heavily mitigated.
+
+**Test3**
+
+* The `test3` benchmark registers an average latency of 8,701 µs and a worst-case peak of 10,037 µs.
+* With an absolute jitter of 1,405 µs, this computational loop shows a massive recovery in predictability compared to the unpinned execution.
+
+### Real-Time Systems Assessment
+
+The "Big Noise Pinned" baseline demonstrates the critical importance of CPU pinning when operating in highly congested environments. By binding tasks to specific cores, the hypervisor scheduler prevents the catastrophic latency spikes observed in the unpinned tests. Lightweight tasks (`matrix1`, `lift`, `huffenc`) return to near-baseline determinism, and heavier workloads (`DEBIE`, `test3`) see their jitter margins compressed significantly.
+
+
+### Max Latency Summary (μs)
+To quickly evaluate system stability, the following table exclusively reports the peak values (**Max Latency**). This format allows for an at-a-glance comparison of the Worst-Case Execution Time across the four operational scenarios, directly highlighting the impact of noise and the effectiveness of CPU pinning in containing interference.
+
+| Benchmark | Baseline | Small Noise | Big Noise | Big Noise Pinned |
+| --- | --- | --- | --- | --- |
+| **DEBIE** | 31,048 | 31,022 | 57,314 | 41,266 |
+| **huffenc** | 35 | 35 | 182 | 42 |
+| **lift** | 85 | 36 | 142 | 43 |
+| **matrix1** | 9 | 8 | 45 | 11 |
+| **test3** | 8,414 | 8,885 | 14,786 | 10,037 |
+

@@ -1,0 +1,17 @@
+# Histogram of matrix1 execution times
+# Unit: microseconds
+000000 998403
+000001 001015
+000002 000011
+000005 000002
+000006 000001
+000007 000034
+000008 000466
+000009 000065
+000010 000002
+000011 000001
+# Total Loops: 1000000
+# Min Latency: 0
+# Avg Latency: 0
+# Max Latency: 11
+# Overflows:   0
