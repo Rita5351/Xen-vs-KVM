@@ -210,7 +210,7 @@ The empirical observation of this sustained test provides insights into the beha
 
 * **Effective Internal Determinism:** The guest-level optimizations seemed sufficient to maintain temporal constraints within a 209 µs window, managing large latency spikes despite the general-purpose hypervisor layer.
  
-## PERFORMANCE ANALYSIS WITH STATIC vCPU PINNING
+## BASELINE PERFORMANCE ANALYSIS WITH STATIC vCPU PINNING
 
 This section advances the performance investigation by introducing a static configuration utilizing virtual CPU (vCPU) pinning. During previous evaluations, the introduction of a background stress workload in Dom0 resulted in a significant degradation of Xen execution latencies. This prompted a targeted investigation to determine whether these high latencies were a fundamental issue caused by the hypervisor scheduler or if they stemmed from the Device Model being preempted by the stress workload. 
 
@@ -296,6 +296,85 @@ The empirical observation of this sustained test provides insights into the beha
 * **Hypervisor-Induced Jitter:** The consistent average latency of 32 µs confirms that the underlying virtualization architecture introduces inherent, unavoidable jitter.
 * **Effective Internal Determinism:** The guest-level optimizations are sufficient to maintain extremely tight temporal constraints. The maximum latency performance remains robust and stable, mirroring the results achieved with a standard Dom0 (67 µs versus 65 µs).
 
+## Impact of the Stress Workload on Latencies with vCPU PINNING
+
+To evaluate system determinism and upper latency bounds under severe conditions, the testing methodology involves executing a continuous 5-minute `cyclictest` probe while introducing a background stress workload within the privileged control domain, Dom0. Across all experiments, the Xen hypervisor is configured with static vCPU pinning—acting as a Null scheduler—to restrict vCPU migration and provide dedicated physical cores to the unprivileged domain, DomU.
+
+Experimental analysis demonstrates that while isolating resources via static pinning establishes a baseline of predictability, the system's Worst-Case Execution Time (WCET) is not uniform; rather, it reveals behaviors that depend strictly on the specific combination of kernel optimizations applied across the domains:
+
+* **Efficacy of DomU Real-Time Patches:** Applying `PREEMPT_RT` patches to the DomU drastically reduces maximum latency spikes, even when the control domain is under stress. While an unoptimized DomU suffers from stress-induced delays peaking at 443 µs, an RT-optimized DomU successfully shields its critical sections, capping the WCET to 76 µs even when paired with an unoptimized Dom0.
+* **Impact of Dom0 Kernel Tuning:** The kernel configuration of the control domain plays a vital role in mitigating severe preemption events. Upgrading Dom0 to a Low Latency kernel significantly improves overall system bounds, cutting the maximum latency for a standard DomU by more than half (from 443 µs to 179 µs) and pushing an RT DomU to the tightest recorded bound of 65 µs.
+* **Persistent Virtualization Overhead:** Despite the dramatic improvements in maximum latency achieved through kernel patches and core pinning, the average latency remains rigidly fixed at approximately 32–33 µs across every tested configuration. This phenomenon indicates that the baseline jitter introduced by the Xen hypervisor layer is a structural constant that cannot be bypassed by domain-level scheduling optimizations alone.
+
+In this section, we will analyze the detailed results of these specific configurations to quantify the determinism and virtualization overhead achievable in a statically pinned Xen architecture.
+
+![Performance under Stress - Static Pinning (Default QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise.svg)
+
+### NON-REAL-TIME KERNEL AND NON-REAL-TIME VM (NULL SCHEDULER)
+ 
+This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the static pinning configuration acting as a Null scheduler. The configuration features a standard (Non-Real-Time) Linux Dom0 and a Non-Real-Time DomU. The objective of this analysis is to evaluate the latency and virtualization overhead under stress conditions when both domains lack real-time optimizations.
+ 
+#### Nominal Performance and Average Latency
+The data collected reveals a noticeable baseline overhead introduced by the virtualization layer. The average latency remained stable at 32 µs throughout the test duration. While the absolute minimum latency recorded was 3 µs, the results demonstrate a variance in nominal execution times.
+ 
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) indicates that static vCPU pinning provides a more bounded execution environment compared to dynamic scheduling. Over the 5-minute continuous test, the absolute maximum latency recorded was bounded at 443 µs. Although this value represents a peak due to the `stressdom0` workload on an unoptimized kernel, the system manages to avoid the catastrophic, multi-millisecond preemption spikes often seen in entirely unpinned, dynamic environments.
+ 
+#### Observations on the Xen Pinned Environment
+The empirical observation of this sustained test provides insights into the behavior of the Xen hypervisor with static pinning:
+* **Bounded but Elevated Latency:** The system bounded the WCET to 443 µs, indicating that while pinning restricts vCPU migration, the unoptimized Dom0 under stress still incurs significant delays.
+* **Average Jitter:** The average latency of 32 µs highlights the inherent jitter introduced by the hypervisor layer itself.
+* **Suitability:** This configuration limits unbounded latency starvation, but the 443 µs peak suggests it is insufficient for strict real-time constraints under heavy workloads.
+ 
+### NON-REAL-TIME KERNEL AND REAL-TIME VM (NULL SCHEDULER)
+ 
+This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool utilizing static vCPU pinning. The configuration features a standard (Non-Real-Time) Linux Dom0 and a `PREEMPT_RT` patched DomU. The objective is to observe how effectively the DomU's internal scheduling can manage execution times when provided with a dedicated physical core, despite the control domain lacking real-time optimizations and operating under stress.
+ 
+#### Nominal Performance and Average Latency
+The data collected reveals that the baseline virtualization overhead heavily influences average execution times. The average latency recorded was 33 µs. The absolute minimum latency achieved was very low at just 3 µs.
+ 
+#### Worst-Case Execution Time (WCET) Analysis
+Despite the average jitter introduced by the hypervisor, the analysis of the Worst-Case Execution Time (WCET) demonstrates excellent stability at the upper bounds. Over the entire 5-minute sustained test, the absolute maximum latency was strictly capped at 76 µs. This indicates that the combination of DomU optimizations and static pinning successfully shielded the critical sections from the stress workload affecting Dom0.
+ 
+#### Observations on the Hybrid Xen Environment
+The empirical observation of this sustained test provides insights into the behaviour of the RT DomU with a Non-RT Dom0 and static pinning:
+* **Bounded WCET:** By tightly capping the absolute maximum latency at 76 µs, the `PREEMPT_RT` DomU kernel showed high effectiveness in establishing a highly predictable upper bound.
+* **Hypervisor-Induced Jitter:** The average latency of 33 µs suggests that the inherent virtualization layer jitter cannot be entirely removed by DomU-side optimizations alone.
+* **Internal Determinism:** In this hybrid configuration, the DomU-level real-time optimizations successfully maintained strict temporal constraints, heavily benefiting from the dedicated physical CPU assignment.
+ 
+### LOW LATENCY KERNEL AND NON-REAL-TIME VM (NULL SCHEDULER)
+ 
+This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool utilizing static vCPU pinning. For this specific test, the Dom0 operating system was configured with a Low Latency kernel while the DomU maintained a Non-Real-Time (NRT) kernel, evaluating the effects of a modified Dom0 on DomU latencies under stress.
+ 
+#### Nominal Performance and Average Latency
+The data collected confirms the consistent baseline behavior of the Xen infrastructure. The average latency remained at 32 µs throughout the entire 5-minute test. The absolute minimum latency achieved was 3 µs.
+ 
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) suggests tangible benefits from this configuration. Over the sustained execution, the absolute maximum latency was bounded at 179 µs. This result indicates that the low-latency optimizations within the Dom0, paired with static pinning, helped to significantly mitigate severe preemption spikes compared to a standard Dom0 kernel (reducing the peak from 443 µs to 179 µs).
+ 
+#### Observations on the Low Latency Xen Environment
+The empirical observation of this sustained test provides insights into the capabilities of a Low Latency Dom0 running with a NRT DomU and static pinning:
+* **Predictable Upper Bounds:** The Low Latency kernel tuning bounded the WCET to 179 µs during the test.
+* **Persistent Hypervisor Jitter:** The average latency of 32 µs confirms that the baseline virtualization overhead dictates the nominal jitter.
+* **Suitability:** This configuration presents a solid improvement in maximum latency over the strictly NRT environment, offering enhanced predictability without requiring a fully patched RT DomU.
+ 
+### LOW LATENCY KERNEL AND REAL-TIME VM (NULL SCHEDULER)
+ 
+This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing static vCPU pinning. This specific configuration features a Low Latency kernel Dom0 and a Real-Time (`PREEMPT_RT`) DomU, evaluated under stress conditions.
+ 
+#### Nominal Performance and Average Latency
+The data collected reveals that the baseline virtualization overhead continues to define the average execution times. The average latency recorded was 33 µs. The absolute minimum latency was recorded at 3 µs.
+ 
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) demonstrates immense stability at the upper limits. Over the entire 5-minute sustained test, the absolute maximum latency was strictly capped at 65 µs. This indicates a complete absence of the severe preemption delays that typically affect standard virtual environments, representing the most optimized bounding in this test suite.
+ 
+#### Observations on the Low Latency RT Hybrid Xen Environment
+The empirical observation of this sustained test provides insights into the behaviour of a RT DomU with a Low Latency Dom0 and static pinning:
+* **Bounded WCET:** By capping the absolute maximum latency at 65 µs, the DomU kernel proved highly effective at establishing a deterministic upper bound when isolated on a dedicated physical core.
+* **Hypervisor-Induced Jitter:** The consistent average latency of 33 µs confirms that the underlying virtualization architecture introduces inherent, unavoidable jitter, irrespective of kernel patches.
+* **Effective Internal Determinism:** The DomU-level optimizations, combined with the Low Latency Dom0, are sufficient to maintain extremely tight temporal constraints, providing robust and stable maximum latency performance.
+
+
 ### Analysis of Device Model priority inversion in modern Xen
 
 In earlier research evaluating the real-time capabilities of hypervisors, a notable priority inversion issue was identified within the Xen architecture. The problem stems from the architectural dependency of Hardware Virtual Machine (HVM) guests on the Device Model. In Xen, when creating an HVM guest that requires a Device Model, this model is typically an instance of QEMU that executes as a standard process inside Domain 0 (Dom0). Because Dom0 is scheduled alongside other virtual machines by the hypervisor, a low-privilege QEMU process on Dom0 could be preempted when Dom0 is placed under heavy computational stress. Consequently, a Real-Time (RT) DomU waiting for the QEMU Device Model could suffer from unbounded latency, compromising its real-time execution guarantees.
@@ -312,7 +391,8 @@ To reproduce and analyze the aforementioned priority inversion on a modern Xen v
 * **Kernel Configurations**: Tests were run across the usual four permutations of Dom0 and DomU kernels.
 * **QEMU Priority Mitigation**: For each kernel combination, a baseline test (default QEMU priority) was compared against a mitigated test (`maxprioqemu`), wherein the QEMU Device Model process in Dom0 was explicitly set to the `SCHED_FIFO` policy with a priority of 99.
 
-![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/xen_backgroundnoise_maxprioqemu.svg)
+![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise_maxprioqemu.svg)
+
 
 ### Empirical Results
 
@@ -324,17 +404,27 @@ A thorough data analysis of the provided cyclictest histograms reveals the follo
 
 Based on the experimental data, the priority inversion problem previously documented in Section 6.2 of the Abeni and Faggioli research seems to be non-existent in this modern Xen deployment. Changing the Device Model priority yields no beneficial effect for the latency bounds of real-time tasks inside the DomU.
 
+With further experiments, we confirmed that changing the priority of the QEMU process does not improve latency even when using the Credit2 scheduler.
+
+![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/xen_backgroundnoise_maxprioqemu.svg)
+
 This behavior indicates that modern Xen HVM implementations successfully decouple essential local timer and interrupt deliveries from the QEMU Device Model. Because CPU-bound real-time workloads (like cyclictest) primarily exercise timer wakeups rather than complex I/O, the DomU can accurately maintain its temporal constraints utilizing hardware virtualization extensions alone. Therefore, manually elevating the priority of the Dom0 QEMU process is unnecessary for maintaining real-time determinism in contemporary Xen environments.
 
-![Performance under Stress - Static Pinning (Default QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise.svg)
+---
+Following the detailed analysis of each individual scenario, the table below provides a consolidated overview of the Worst-Case Execution Time (WCET) measurements. It allows for a direct comparison across all four Dom0-DomU kernel configurations (**NRT-NRT**, **NRT-RT**, **LL-NRT**, and **LL-RT**) under the four tested scheduling and load conditions: standard dynamic execution (**BASELINE**), execution under heavy system load within Dom0 (**STRESS WORKLOAD**), execution with static core isolation (**vCPU PINNING BASELINE**), and isolated execution under heavy load (**vCPU PINNING STRESS WORKLOAD**).
 
-![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise_maxprioqemu.svg)
+| Configurazione | NRT-NRT | NRT-RT | LL-NRT | LL-RT |
+|---|---|---|---|---|
+| **BASELINE** | 369 | 74 | 152 | 71 |
+| **STRESS WORLOAD** | 239 | 177 | 526 | 209 |
+| **vCPU PINNING BASELINE** | 137 | 67 | 179 | 65 |
+| **vCPU PINNING STRESS WORKLOAD** | 443 | 76 | 410 | 163 |
 
 ## TACLe Benchmark
 
 This section of the documentation illustrates the rationale behind the selection of the benchmarks extracted from the **TACLeBench** version 1.9 suite and the methodology adopted for their execution within our architecture. The goal is to provide a heterogeneous workload to accurately validate execution latencies and performance stability in environments with strict real-time requirements.
 
-## 1. Benchmark Selection
+### 1. Benchmark Selection
 
 We selected a representative program for each of the main TACLeBench categories, ensuring optimal coverage of the different execution patterns.
 
@@ -344,7 +434,7 @@ We selected a representative program for each of the main TACLeBench categories,
 * **Parallel Benchmark (`Debie`):** Aerospace observation tool (6615 SLOC, Tidorum Ltd) consisting of 8 tasks. Essential for testing synchronization mechanisms and preemption in multi-tasking scenarios.
 * **Application Benchmark (`lift`):** An elevator controller (361 SLOC, Martin Schoeberl). Verifies that the latency metrics from synthetic tests guarantee stability in a real cyber-physical control application.
 
-## 2. Execution Methodology and Test Scenarios
+### 2. Execution Methodology and Test Scenarios
 
 To rigorously analyze the system's behavior and the impact of the virtualization architecture, **all 5 selected benchmarks were executed on the LL-RT (Low-Latency Dom0, Real-Time DomU) configuration**.
 
@@ -389,11 +479,11 @@ To clearly understand the extent of the interference of a different DomU stress 
 * **Big Noise**: a more beefy DomU configuration with 16 vCPUs and 16 GB of RAM. In this case, the interference introduced is more severe, pushing the limits of the isolation mechanism.
 * **Big Noise with pinning**: the same of the previous setup but with added static vCPU pinning. This would determine how much the scheduling algorithm affects the isolation of the domains.
 
-## TACLeBench Baseline Execution Analysis
+### TACLeBench Baseline Execution Analysis
 
 Establishing this baseline is a critical first step for comparing the determinism and worst-case execution time (WCET) latencies, a Type 1 hypervisor utilizing Dom0 and DomU architectures. The following analysis evaluates the raw execution logs to quantify system determinism before introducing vCPU pinning.
 
-### Baseline Latency Summary
+#### Baseline Latency Summary
 
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
@@ -403,7 +493,7 @@ Establishing this baseline is a critical first step for comparing the determinis
 | **matrix1** | 1,000,000 | 0 | 0 | 9 | 9 μs |
 | **test3** | 10,000 | 8,286 | 8,328 | 8,414 | 128 μs |
 
-### Workload-Specific Behavior
+#### Workload-Specific Behavior
 
 **DEBIE**
 
@@ -434,15 +524,15 @@ Establishing this baseline is a critical first step for comparing the determinis
 * The `test3` benchmark represents a heavier execution profile containing 10,000 loops, an average latency of 8,328 µs, and a maximum of 8,414 µs.
 * The tighter jitter (128 µs) relative to its extended execution time suggests a steady computational loop that is less affected by micro-interruptions compared to the highly variable DEBIE benchmark.
 
-### Real-Time Systems Assessment
+#### Real-Time Systems Assessment
 
 This baseline demonstrates a standard, unisolated environment where lightweight tasks (`matrix1`, `lift`, `huffenc`) execute with near-perfect determinism, while heavier tasks (`DEBIE`) suffer from severe scheduling jitter. The outliers observed in `lift` (85 µs) and `huffenc` (35 µs) are the specific OS noise artifacts that isolation mechanisms aim to eliminate. When transferring these workloads to virtualized setups, tracking the expansion of these maximum latency tails will directly quantify the scheduling interference introduced by the virtualization layer.
 
-## TACLeBench Small Noise Execution Analysis
+### TACLeBench Small Noise Execution Analysis
 
 This phase of testing evaluates the determinism and worst-case execution time (WCET) latencies of KVM and Xen (a Type 1 hypervisor utilizing Dom0 and DomU architectures) under a "Small Noise" configuration. The following analysis interprets the execution logs to quantify how minor system disturbances impact the predictability of the hypervisor scheduling.
 
-### Small Noise Latency Summary
+#### Small Noise Latency Summary
 
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
@@ -452,7 +542,7 @@ This phase of testing evaluates the determinism and worst-case execution time (W
 | **matrix1** | 1,000,000 | 0 | 0 | 8 | 8 μs |
 | **test3** | 10,000 | 8,286 | 8,331 | 8,885 | 599 μs |
 
-### Workload-Specific Behavior
+#### Workload-Specific Behavior
 
 **DEBIE**
 
@@ -479,15 +569,15 @@ This phase of testing evaluates the determinism and worst-case execution time (W
 * The `test3` benchmark executed 10,000 loops with an average latency of 8,331 µs.
 * The maximum latency reached 8,885 µs, pushing the absolute jitter to 599 µs. The jitter expansion here is heavily influenced by specific micro-interruptions captured during the run.
 
-### Real-Time Systems Assessment
+#### Real-Time Systems Assessment
 
 Evaluating the small noise scenario reveals that lightweight and highly repetitive tasks (`matrix1`, `lift`, `huffenc`) can maintain extreme determinism, with jitter boundaries narrowing significantly (such as `lift` dropping to a 36 µs max peak). Heavier workloads like `DEBIE` continue to exhibit substantial variance. 
 
-## TACLeBench Big Noise Execution Analysis
+### TACLeBench Big Noise Execution Analysis
 
 This phase of the evaluation investigates the determinism and worst-case execution time (WCET) latencies of a Xen DomU in the presence of another, big-sized DomU affected by significant stress workload. The following analysis examines the execution logs to quantify how significant system disturbances and heavy background noise degrade the predictability of the scheduler prior to applying isolation techniques.
 
-### Big Noise Latency Summary
+#### Big Noise Latency Summary
 
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
@@ -497,7 +587,7 @@ This phase of the evaluation investigates the determinism and worst-case executi
 | **matrix1** | 1,000,000 | 0 | 0 | 45 | 45 μs |
 | **test3** | 10,000 | 8,287 | 9,182 | 14,786 | 6,499 μs |
 
-### Workload-Specific Behavior
+#### Workload-Specific Behavior
 
 **DEBIE**
 
@@ -529,15 +619,15 @@ This phase of the evaluation investigates the determinism and worst-case executi
 
 * The absolute jitter jumps to 6,499 µs, derived from a minimum execution time of 8,287 µs, proving that medium-weight computational loops cannot maintain steady execution states when sharing unisolated CPU resources with heavy noise.
 
-### Real-Time Systems Assessment
+#### Real-Time Systems Assessment
 
 The results of these tests effectively demonstrates the catastrophic loss of determinism across all workloads while the system is under stress because of another DomU. Even ultra-lightweight tasks like `matrix1` and `lift` experience significant latency spikes, while heavy tasks like `DEBIE` become entirely unpredictable. This demostrates the ineffectiveness of the isolation boundaries of the native Xen architecture.
 
-## TACLeBench Big Noise Pinned Execution Analysis
+### TACLeBench Big Noise Pinned Execution Analysis
 
 This phase of the evaluation investigates the determinism and worst-case execution time (WCET) latencies of a Xen DomU in the presence of another, big-sized DomU affected by significant stress workload. Because of the poor performance of the unpinned configuration, exhibiting excessively high latencies, CPU pinning was introduced to restrain the interference. The following analysis examines the execution logs to quantify how this pinning mitigates system disturbances.
 
-### Big Noise Pinned Latency Summary
+#### Big Noise Pinned Latency Summary
 
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
@@ -547,7 +637,7 @@ This phase of the evaluation investigates the determinism and worst-case executi
 | **matrix1** | 1,000,000 | 0 | 0 | 11 | 11 μs |
 | **test3** | 10,000 | 8,632 | 8,701 | 10,037 | 1,405 μs |
 
-### Workload-Specific Behavior
+#### Workload-Specific Behavior
 
 **DEBIE**
 
@@ -574,7 +664,7 @@ This phase of the evaluation investigates the determinism and worst-case executi
 * The `test3` benchmark registers an average latency of 8,701 µs and a worst-case peak of 10,037 µs.
 * With an absolute jitter of 1,405 µs, this computational loop shows a massive recovery in predictability compared to the unpinned execution.
 
-### Real-Time Systems Assessment
+#### Real-Time Systems Assessment
 
 The "Big Noise Pinned" baseline demonstrates the critical importance of CPU pinning when operating in highly congested environments. By binding tasks to specific cores, the hypervisor scheduler prevents the catastrophic latency spikes observed in the unpinned tests. Lightweight tasks (`matrix1`, `lift`, `huffenc`) return to near-baseline determinism, and heavier workloads (`DEBIE`, `test3`) see their jitter margins compressed significantly.
 

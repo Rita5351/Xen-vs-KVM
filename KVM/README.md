@@ -324,3 +324,5 @@ Following the detailed analysis of each individual scenario, the table below pro
 | **BASELINE** | 602 | 6114 | 93 | 81 |
 | **STRESSHOST** | 44409 | 51069 | 50257 | 9829 |
 | **STRESSHOST ISOLATED** | 2024 | 2299 | 1502 | 1935 |
+
+## TACLe Benchmark
