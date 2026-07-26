@@ -326,3 +326,251 @@ Following the detailed analysis of each individual scenario, the table below pro
 | **STRESSHOST ISOLATED** | 2024 | 2299 | 1502 | 1935 |
 
 ## TACLe Benchmark
+
+This section of the documentation illustrates the rationale behind the selection of the benchmarks extracted from the **TACLeBench** version 1.9 suite and the methodology adopted for their execution within our architecture. The goal is to provide a heterogeneous workload to accurately validate execution latencies and performance stability in environments with strict real-time requirements.
+
+### 1. Benchmark Selection
+
+We selected a representative program for each of the main TACLeBench categories, ensuring optimal coverage of the different execution patterns.
+
+* **Kernel Benchmark (`matrix1`):** Isolates the most computationally intensive portions of code to evaluate raw CPU performance and cache efficiency.
+* **Sequential Benchmark (`huff_enc`):** Evaluates sequential processing and memory access patterns. Data compression (325 SLOC, David Bourgin) is excellent for measuring latency variations in single-threaded execution.
+* **Test Benchmark (`test3`):** An artificial stress test for WCET (Worst-Case Execution Time, 4235 SLOC, Universität des Saarlandes) analysis. It pushes the execution engine to its limits to measure time safety margins and system robustness.
+* **Parallel Benchmark (`Debie`):** Aerospace observation tool (6615 SLOC, Tidorum Ltd) consisting of 8 tasks. Essential for testing synchronization mechanisms and preemption in multi-tasking scenarios.
+* **Application Benchmark (`lift`):** An elevator controller (361 SLOC, Martin Schoeberl). Verifies that the latency metrics from synthetic tests guarantee stability in a real cyber-physical control application.
+
+### 2. Execution Methodology and Test Scenarios
+
+To rigorously analyze the system's behavior and the impact of the virtualization architecture, **all 5 selected benchmarks were executed on the LL-RT (Low-Latency Host, Real-Time Guest) configuration**.
+
+For each benchmark, we defined a test matrix composed of four operational scenarios. In all baseline configurations, **4 vCPUs were assigned to the Host**. The analyzed variables concern the introduction of a stress load (noise) of varying size originating from another Guest VM and the application of vCPU pinning (crucial for avoiding context migrations and stabilizing latencies).
+
+To ensure strict real-time conditions and accurate latency measurements, the execution procedure was carefully standardized across all test scenarios. The process involved specific compilation flags, scheduler modifications, and rigid execution parameters designed to eliminate typical operating system interference.
+
+**Compilation and Preparation**
+Each of the benchmarks were modified to support automatically changing scheduling priority and repeated executions (the source code is available in this repository). We then compiled them using `-O2` optimizations and linked with the necessary POSIX real-time and threading libraries:
+
+```bash
+# [Insert command here]
+
+```
+
+**Benchmark Execution Parameters**
+The TACLe benchmarks were executed via the command line with a strict set of arguments to maintain deterministic behavior. The fundamental flags applied across the tests included:
+
+* `--mlockall`: Locks the process's memory pages directly into RAM, preventing any unpredictable latency spikes caused by page faults or disk swapping.
+* `--priority=99`: Enforces the highest real-time priority internally for the benchmark's execution thread.
+* `--affinity=1`: Applies CPU pinning, locking the execution strictly to CPU core 1. This is a critical step to prevent costly context migrations across different processor cores.
+
+Below are the exact execution commands utilized for the targeted benchmarks:
+
+```bash
+# [Insert command here]
+
+```
+
+**Noise Generation Strategy**
+To evaluate the architectural robustness and jitter expansion during the noisy scenarios, interference was artificially injected into the system. This was achieved using `stress-ng` to spawn multiple aggressive workers, intentionally taxing the CPU cores and the virtual memory subsystem to simulate severe cache thrashing and scheduling pressure:
+
+```bash
+# [Insert command here]
+
+```
+
+**Virtual Machine Configuration**
+To clearly understand the extent of the interference of a different Guest VM stress workload on the critical guest, we designed two test scenarios:
+
+* **Small Noise**: a small Guest VM with just 2 vCPUs and 4 GB of RAM. This would introduce a small amount of noise, thus testing if at least some isolation is provided.
+* **Big Noise**: a more beefy Guest VM configuration with 16 vCPUs and 16 GB of RAM. In this case, the interference introduced is more severe, pushing the limits of the isolation mechanism.
+* **Big Noise with pinning**: the same of the previous setup but with added static vCPU pinning. This would determine how much the scheduling algorithm affects the isolation of the virtual machines.
+
+### TACLeBench Baseline Execution Analysis 
+
+Establishing this baseline is critical for evaluating the determinism and worst-case execution time (WCET) latencies of the KVM hypervisor. The following analysis interprets the raw execution logs to quantify the baseline scheduling determinism before the introduction of concurrent noisy guests.
+
+#### Baseline Latency Summary
+
+| Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
+| --- | --- | --- | --- | --- | --- |
+| **DEBIE** | 10,000 | 23,578 | 27,214 | 32,409 | 8,831 μs |
+| **huffenc** | 1,000,000 | 15 | 16 | 64 | 49 μs |
+| **lift** | 1,000,000 | 19 | 19 | 61 | 42 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 1 | 1 μs |
+| **test3** | 10,000 | 8,169 | 8,363 | 9,471 | 1,302 μs |
+
+#### Workload-Specific Behavior
+
+**DEBIE**
+
+* The DEBIE benchmark represents the heaviest parallel workload, executing 10,000 loops with execution times ranging from 23,578 µs to 32,409 µs.
+* The absolute jitter sits at 8,831 µs, indicating typical baseline scheduling overhead and preemption for a heavy multi-tasking application on an unisolated KVM host.
+
+**Huffenc**
+
+* The `huffenc` benchmark executed 1,000,000 loops with an extremely stable average latency of 16 µs.
+* The maximum latency peaked at 64 µs, resulting in an absolute jitter of 49 µs.
+
+**Lift**
+
+* The `lift` application benchmark showed strong determinism, maintaining an average latency of 19 µs matching its minimum latency.
+* The worst-case latency was 61 µs, yielding a tightly bounded jitter of 42 µs on this KVM baseline.
+
+**Matrix1**
+
+* The `matrix1` kernel benchmark was extremely fast, executing 1,000,000 loops with sub-microsecond average latency.
+* The maximum execution time was strictly capped at just 1 µs, demonstrating near-perfect cache efficiency and virtually zero jitter (1 µs).
+
+**Test3**
+
+* The `test3` benchmark executed 10,000 loops with an average latency of 8,363 µs.
+* The maximum latency reached 9,471 µs, resulting in an absolute jitter of 1,302 µs, representing standard noise interference on a medium-weight computational loop.
+
+#### Real-Time Systems Assessment
+
+This KVM baseline provides the reference point for unisolated virtualized performance. Lightweight tasks (`matrix1`) exhibit virtually zero jitter (1 µs peak), while medium and heavy tasks (`test3`, `DEBIE`) show the natural variance introduced by the standard KVM scheduler (up to 8,831 µs of jitter for DEBIE). These metrics will be crucial for quantifying the exact determinism improvements when CPU pinning and LL-RT kernel isolation techniques are introduced.
+
+### TACLeBench Small Noise Execution Analysis
+
+This analysis evaluates the determinism and worst-case execution time (WCET) latencies of the KVM hypervisor under a "Small Noise" configuration. By introducing minor background system stress, we can quantify the sensitivity of the unisolated KVM scheduler to light interference.
+
+#### Small Noise Latency Summary
+
+| Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
+| --- | --- | --- | --- | --- | --- |
+| **DEBIE** | 10,000 | 23,800 | 27,221 | 30,872 | 7,072 μs |
+| **huffenc** | 1,000,000 | 15 | 15 | 61 | 46 μs |
+| **lift** | 1,000,000 | 19 | 19 | 58 | 39 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 0 | 0 μs |
+| **test3** | 10,000 | 8,078 | 8,270 | 8,612 | 534 μs |
+
+#### Workload-Specific Behavior
+
+**DEBIE**
+
+* The heavy parallel DEBIE workload experiences execution times ranging from 23,800 µs to 30,872 µs.
+* The absolute jitter sits at 7,072 µs, showing that even small amounts of noise can cause significant preemption and scheduling variation for complex multi-tasking applications.
+
+**Huffenc**
+
+* The sequential `huffenc` task executes with an average latency of 15 µs and a maximum peak of 61 µs.
+* This results in a relatively tight absolute jitter of 46 µs.
+
+**Lift**
+
+* The `lift` control benchmark maintains strong determinism under light noise, averaging 19 µs with a worst-case execution time of 58 µs.
+* The resulting jitter is closely bounded at 39 µs, showing good resilience to minor disturbances.
+
+**Matrix1**
+
+* The lightweight, cache-bound `matrix1` benchmark performs flawlessly under the small noise configuration, logging sub-microsecond values across minimum, average, and maximum execution times.
+* This yields a theoretical absolute jitter of under 1 µs, indicating zero cache thrashing or scheduling interruptions occurred during its 1,000,000 loops.
+
+**Test3**
+
+* The `test3` WCET stress test executes with an average latency of 8,270 µs.
+* The maximum latency reaches 8,612 µs, keeping the absolute jitter contained at just 534 µs.
+
+#### Real-Time Systems Assessment
+
+Under the KVM "Small Noise" scenario, the hypervisor exhibits relatively stable behavior for lightweight and medium workloads. Notably, `matrix1` shows perfect execution without any measurable jitter, and `test3` maintains tight WCET margins. However, the `DEBIE` workload still suffers from over 7 milliseconds of jitter, confirming that unisolated schedulers struggle to guarantee execution determinism for long-running, parallel tasks even when background noise is minimal.
+
+### TACLeBench Big Noise Execution Analysis 
+
+This analysis evaluates the determinism and worst-case execution time (WCET) latencies of the KVM hypervisor under a "Big Noise" configuration. By introducing heavy simulated stress via `stress-ng`, we can quantify how severely external disturbances and resource contention degrade the scheduling predictability of the baseline KVM setup before any CPU pinning or kernel isolation is applied.
+
+#### Big Noise Latency Summary
+
+| Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
+| --- | --- | --- | --- | --- | --- |
+| **DEBIE** | 10,000 | 24,773 | 28,845 | 43,849 | 19,076 μs |
+| **huffenc** | 1,000,000 | 15 | 26 | 69 | 54 μs |
+| **lift** | 1,000,000 | 19 | 19 | 280 | 261 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 6 | 6 μs |
+| **test3** | 10,000 | 8,243 | 8,457 | 9,458 | 1,215 μs |
+
+#### Workload-Specific Behavior
+
+**DEBIE**
+
+* The heavy parallel DEBIE workload experiences significant disruption under noise, with the maximum execution time expanding to 43,849 µs.
+* The absolute jitter nearly doubles compared to the KVM baseline, reaching 19,076 µs, highlighting severe preemption and scheduling delays when competing for resources.
+
+**Huffenc**
+
+* While the minimum latency for the `huffenc` task remains stable at 15 µs, the average latency rises to 26 µs under noise.
+* The maximum latency peaks at 69 µs, resulting in a relatively contained absolute jitter of 54 µs for this specific sequential pattern.
+
+**Lift**
+
+* The `lift` benchmark shows a sharp breakdown in worst-case determinism, with the maximum latency spiking dramatically to 280 µs.
+* This generates an absolute jitter of 261 µs, indicating that even highly repetitive, lightweight control tasks suffer from severe, albeit occasional, micro-interruptions under heavy KVM load.
+
+**Matrix1**
+
+* The `matrix1` execution remains extremely fast, maintaing a sub-microsecond average latency.
+* However, the maximum latency increases to 6 µs, representing a 6 µs jitter. While numerically small, this indicates minor cache thrashing or context switching interference affecting the otherwise instantaneous execution.
+
+**Test3**
+
+* The `test3` benchmark registers an average latency of 8,457 µs and a worst-case peak of 9,458 µs.
+* The absolute jitter sits at 1,215 µs, which is surprisingly consistent with its baseline performance, suggesting this specific computational loop is somewhat resilient to the injected memory and CPU stress.
+
+#### Real-Time Systems Assessment
+
+The KVM "Big Noise" scenario illustrates the vulnerability of unisolated hypervisor scheduling. While some workloads (`test3`, `matrix1`) show mild resilience, the heavy `DEBIE` workload suffers massive jitter expansion (19,076 µs), and the critical `lift` control loop experiences severe latency spikes (280 µs peak). These results suggest the lack of boundaries required for real-time applications.
+
+## TACLeBench Big Noise Pinned Execution Analysis 
+
+This phase of the evaluation investigates the determinism and worst-case execution time (WCET) latencies of the KVM hypervisor under a "Big Noise Pinned" configuration. Because the unpinned "Big Noise" results exhibited high latencies and severe jitter, CPU pinning was introduced to lock the execution to specific cores. The following analysis examines the execution logs to quantify how this pinning mitigates system disturbances under KVM.
+
+### Big Noise Pinned Latency Summary
+
+| Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
+| --- | --- | --- | --- | --- | --- |
+| **DEBIE** | 10,000 | 23,893 | 27,444 | 37,284 | 13,391 μs |
+| **huffenc** | 1,000,000 | 15 | 16 | 62 | 47 μs |
+| **lift** | 1,000,000 | 19 | 20 | 67 | 48 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 1 | 1 μs |
+| **test3** | 10,000 | 8,544 | 8,745 | 10,996 | 2,452 μs |
+
+### Workload-Specific Behavior
+
+**DEBIE**
+
+* The DEBIE benchmark ranges from a minimum of 23,893 µs to a maximum of 37,284 µs.
+* Pinning the execution restrains the absolute jitter to 13,391 µs. While still representing a significant preemption delay, it is a notable improvement over the KVM unpinned big noise scenario.
+
+**Huffenc**
+
+* The `huffenc` task executes with an average latency of 16 µs and a maximum peak of 62 µs.
+* CPU pinning effectively bounds the absolute jitter at 47 µs, restoring a high degree of stability to this sequential loop.
+
+**Lift**
+
+* Under the pinned configuration, the `lift` benchmark regains strict determinism, maintaining an average latency of 20 µs.
+* The maximum latency reaches only 67 µs, yielding a tight absolute jitter of 48 µs, which completely eliminates the massive 280 µs spike seen in the unpinned noise test.
+
+**Matrix1**
+
+* The `matrix1` execution is almost perfectly insulated by the pinning, maintaining a sub-microsecond average latency and an absolute worst-case execution time of just 1 µs.
+* This 1 µs absolute jitter confirms that cache thrashing and context migrations have been successfully mitigated.
+
+**Test3**
+
+* The `test3` benchmark registers an average latency of 8,745 µs and a worst-case peak of 10,996 µs.
+* With an absolute jitter of 2,452 µs, this computational loop maintains a relatively controlled variance compared to unpinned scenarios.
+
+### Real-Time Systems Assessment
+
+The KVM "Big Noise Pinned" baseline demonstrates the critical importance of CPU pinning when operating in highly congested environments. By binding tasks to specific cores, the KVM scheduler prevents the catastrophic latency spikes observed in the unpinned tests. Lightweight tasks (`matrix1`, `lift`, `huffenc`) return to near-baseline determinism, and heavier workloads (`DEBIE`) see their jitter margins compressed significantly. This confirms that static pinning is a highly effective first step in isolating real-time workloads on KVM before applying further kernel-level techniques.
+
+### Max Latency Summary (μs)
+To quickly evaluate system stability, the following table exclusively reports the peak values (**Max Latency**). This format allows for an at-a-glance comparison of the Worst-Case Execution Time across the four operational scenarios, directly highlighting the impact of noise and the effectiveness of CPU pinning in containing interference.
+
+| Benchmark | Baseline | Small Noise | Big Noise | Big Noise Pinned |
+| --- | --- | --- | --- | --- |
+| **DEBIE** | 32,409 | 30,872 | 43,849 | 37,284 |
+| **huffenc** | 64 | 61 | 69 | 62 |
+| **lift** | 61 | 58 | 280 | 67 |
+| **matrix1** | 1 | 0 | 6 | 1 |
+| **test3** | 9,471 | 8,612 | 9,458 | 10,996 |

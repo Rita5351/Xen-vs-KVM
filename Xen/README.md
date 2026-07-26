@@ -375,7 +375,7 @@ The empirical observation of this sustained test provides insights into the beha
 * **Effective Internal Determinism:** The DomU-level optimizations, combined with the Low Latency Dom0, are sufficient to maintain extremely tight temporal constraints, providing robust and stable maximum latency performance.
 
 
-### Analysis of Device Model priority inversion in modern Xen
+## Analysis of Device Model priority inversion in modern Xen
 
 In earlier research evaluating the real-time capabilities of hypervisors, a notable priority inversion issue was identified within the Xen architecture. The problem stems from the architectural dependency of Hardware Virtual Machine (HVM) guests on the Device Model. In Xen, when creating an HVM guest that requires a Device Model, this model is typically an instance of QEMU that executes as a standard process inside Domain 0 (Dom0). Because Dom0 is scheduled alongside other virtual machines by the hypervisor, a low-privilege QEMU process on Dom0 could be preempted when Dom0 is placed under heavy computational stress. Consequently, a Real-Time (RT) DomU waiting for the QEMU Device Model could suffer from unbounded latency, compromising its real-time execution guarantees.
 
