@@ -341,9 +341,9 @@ We selected a representative program for each of the main TACLeBench categories,
 
 ### 2. Execution Methodology and Test Scenarios
 
-To rigorously analyze the system's behavior and the impact of the virtualization architecture, **all 5 selected benchmarks were executed on the LL-RT (Low-Latency Host, Real-Time Guest) configuration**.
+To rigorously analyze the system's behavior and the impact of the virtualization architecture, **all 5 selected benchmarks were executed on the RT-RT (Real Time Host, Real-Time Guest) configuration**.
 
-For each benchmark, we defined a test matrix composed of four operational scenarios. In all baseline configurations, **4 vCPUs were assigned to the Host**. The analyzed variables concern the introduction of a stress load (noise) of varying size originating from another Guest VM and the application of vCPU pinning (crucial for avoiding context migrations and stabilizing latencies).
+For each benchmark, we defined a test matrix composed of four operational scenarios. In all configurations, **4 cores were dedicated to the Host**, and we prevented tasks to be scheduled on other cores by adopting some of the OS-level isolation techniques we already used: Tickless Mode, RCU callback offloading and IRQ affinity. Kernel scheduling isolation was not used because it interfered with the way KVM assigned virtual CPUs to phisical ones. The analyzed variables concern the introduction of a stress load (noise) of varying size originating from another Guest VM and the application of vCPU pinning (crucial for avoiding context migrations and stabilizing latencies).
 
 To ensure strict real-time conditions and accurate latency measurements, the execution procedure was carefully standardized across all test scenarios. The process involved specific compilation flags, scheduler modifications, and rigid execution parameters designed to eliminate typical operating system interference.
 
@@ -351,7 +351,7 @@ To ensure strict real-time conditions and accurate latency measurements, the exe
 Each of the benchmarks were modified to support automatically changing scheduling priority and repeated executions (the source code is available in this repository). We then compiled them using `-O2` optimizations and linked with the necessary POSIX real-time and threading libraries:
 
 ```bash
-# [Insert command here]
+gcc -O2 -o test3 test3.c -lpthread -lrt
 
 ```
 
@@ -365,15 +365,15 @@ The TACLe benchmarks were executed via the command line with a strict set of arg
 Below are the exact execution commands utilized for the targeted benchmarks:
 
 ```bash
-# [Insert command here]
-
+# Executing test3 (pseudo-cyclictest) for 10,000 loops and outputting a latency histogram
+sudo ./test3 --mlockall --priority=99 --affinity=1 --loops=10000 --histogram=1000000 --histfile=results/results_test3_baseline.log
 ```
 
 **Noise Generation Strategy**
 To evaluate the architectural robustness and jitter expansion during the noisy scenarios, interference was artificially injected into the system. This was achieved using `stress-ng` to spawn multiple aggressive workers, intentionally taxing the CPU cores and the virtual memory subsystem to simulate severe cache thrashing and scheduling pressure:
 
 ```bash
-# [Insert command here]
+stress-ng --cpu 16 --vm 16 --vm-bytes 1G --timeout 10m
 
 ```
 
