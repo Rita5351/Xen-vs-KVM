@@ -1,54 +1,102 @@
-from pathlib import Path
+import os
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-
-# 1. Carica i dati ignorando le righe di commento (che iniziano con #)
-# Sostituisci il nome del file se necessario
-
-# Test senza stress
-test_classes = [Path('KVM/tests/results_nrt_nrt_stresshost_isolated.log'),
-                Path('KVM/tests/results_nrt_rt_stresshost_isolated.log'),
-                Path('KVM/tests/results_rt_nrt_stresshost_isolated.log'),
-                Path('KVM/tests/results_rt_rt_stresshost_isolated.log')]
-
-# Test con stress (verifica che l'estensione finale sia corretta)
-# test_classes = [Path('KVM/tests/results_nrt_nrt_stresshost.log'),
-#                 Path('KVM/tests/results_nrt_rt_stresshost.log'),
-#                 Path('KVM/tests/results_rt_nrt_stresshost.log'),
-#                 Path('KVM/tests/results_rt_rt_stresshost.log')]
-
-def plot_data(filename):
-    data = np.loadtxt(filename, comments='#')
-    latencies = data[:, 0]
-    frequencies = data[:, 1]
-    cdf = np.cumsum(frequencies) / np.sum(frequencies)
-    plt.plot(latencies, cdf)
-
-
-plt.figure(figsize=(10, 6))
-for filename in test_classes:
-    plot_data(filename)
-
-# Formattazione
-plt.xlabel(r'Latency ($\mu s$)') # Aggiunta la 'r' per risolvere il SyntaxWarning
-plt.ylabel('Cumulative Distribution Function (CDF)')
-plt.title('Cyclictest latencies on KVM')
-plt.grid(True, linestyle='--', alpha=0.7)
-
-# Limiti assi
-plt.xlim(left=0, right=100)
-plt.ylim(0, 1.05)
-plt.legend(['NRT Kernel, NRT VM',
-            'NRT Kernel, RT VM',
-            'RT Kernel, NRT VM',
-            'RT Kernel, RT VM'])
-
-# Opzionale: Salva su file o mostra a schermo e salva i dati per LaTeX
-plt.savefig('kvm_nonoise.svg')
-# plt.savefig('kvm_stress.svg')
-plt.show()
-
-# --- ESPORTAZIONE PER LATEX ---
-# np.savetxt("kvm_nonoise.txt", np.column_stack((latencies, cdf)),
-#            fmt="%.0f %.6f", header="latency cdf", comments="")
-# print("Dati CDF esportati per LaTeX in kvm_nonoise.txt")
+import seaborn as sns
+from pathlib import Path
+ 
+# Impostazioni grafiche riprese dal tuo script originale
+sns.set_theme(style="whitegrid")
+plt.rcParams.update({
+    'font.size': 11,
+    'axes.labelsize': 12,
+    'axes.titlesize': 14,
+    'xtick.labelsize': 10,
+    'ytick.labelsize': 10,
+    'figure.titlesize': 16,
+    'legend.fontsize': 10
+})
+ 
+# Dizionario per mappare i file alle relative etichette
+# (assicurati di aver inserito tutti i kernel e le VM testate)
+test_files = {
+    Path('Xen/tests_TACLe/results_test3_baseline.log'): 'BASELINE',
+    Path('Xen/tests_TACLe/results_test3_smallnoise.log'): 'SMALL NOISE',
+    Path('Xen/tests_TACLe/results_test3_bignoise.log'): 'BIG NOISE',
+    Path('Xen/tests_TACLe/results_test3_bignoise_pinned.log'): 'BIG NOISE PINNED'
+   
+}
+ 
+def load_histogram_data(filepath, config_name):
+    """Carica i dati del test TACLe ed espande le frequenze per il boxplot"""
+    try:
+        data = np.loadtxt(filepath, comments='#')
+        latencies = data[:, 0]
+        frequencies = data[:, 1].astype(int)
+ 
+        # Ricostruisce l'array originale dei campioni
+        expanded_latencies = np.repeat(latencies, frequencies)
+ 
+        return pd.DataFrame({
+            'Latency_us': expanded_latencies,
+            'Configuration': config_name
+        })
+    except FileNotFoundError:
+        print(f"[ERRORE] File non trovato: {filepath}")
+        return pd.DataFrame()
+ 
+def main():
+    df_list = []
+ 
+    print("=== CARICAMENTO DATI TACLE ===")
+    for filepath, label in test_files.items():
+        print(f"Elaborazione: {label}...")
+        df_config = load_histogram_data(filepath, label)
+        if not df_config.empty:
+            df_list.append(df_config)
+ 
+    if not df_list:
+        print("[ERRORE] Nessun dato caricato. Controlla i percorsi dei file.")
+        return
+ 
+    # Unisce tutti i dati in un singolo DataFrame Pandas
+    df_all = pd.concat(df_list, ignore_index=True)
+ 
+    # --- Stampa dei Valori di Picco Massimo ---
+    print("\n=== VALORI DI LATENZA MASSIMA (PICCO) ===")
+    max_latencies = df_all.groupby('Configuration')['Latency_us'].max()
+    for config, max_lat in max_latencies.items():
+        print(f"{config}: {max_lat} µs")
+ 
+    # --- Creazione Boxplot ---
+    plt.figure(figsize=(12, 7))
+ 
+    ax = sns.boxplot(
+    data=df_all,
+    x='Configuration',
+    y='Latency_us',
+    palette="Set2",
+    width=0.6,
+    # Sostituisci fliersize con flierprops e attiva il rasterized
+    flierprops={"marker": ".", "markersize": 2, "alpha": 0.5, "rasterized": True}
+)
+ 
+    # La scala logaritmica è fortemente consigliata per visualizzare
+    # la distribuzione mantenendo visibili i picchi anomali
+    ax.set_yscale('log')
+ 
+    plt.title('test3 execution time on Xen ', pad=20, fontweight='bold')
+    plt.xlabel('System Configuration', labelpad=12)
+    plt.ylabel(r'Latency ($\mu s$) [Log Scale]', labelpad=12)
+ 
+    plt.grid(True, which="both", linestyle=":", alpha=0.6)
+    plt.tight_layout()
+ 
+    # Salvataggio
+    output_filename = 'Xen_TACLe_test3_boxplot.svg'
+    plt.savefig(output_filename, format='svg', bbox_inches='tight')
+    plt.close()
+    print(f"\n[OK] Boxplot salvato con successo: {output_filename}")
+ 
+if __name__ == "__main__":
+    main()
