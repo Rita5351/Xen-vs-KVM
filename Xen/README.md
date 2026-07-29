@@ -689,15 +689,27 @@ We previously attempted to reproduce this issue using a newer version of Xen (4.
 
 To further verify this conclusion, we extended our analysis to PV and PVH guests. In this section, we reproduce the most relevant scenarios for guests running on these different virtualization technologies and analyze their resulting behaviors.
 
-### PV DomU and RT Kernel
+### RT Kernel and PARAVIRTUALIZATION
 
 While configuring the PV guest, we encountered the same issue observed during the [initial setup process](../Setup/README.md#problems-with-preempt_rt). This time, because the output logs were routed to the terminal, we were able to identify the cause. The logs revealed a **soft CPU lockup**, confirming that the issue stemmed from the `PREEMPT_RT` patch. We hypothesize that this failure relates to how the patch modifies low-level mechanisms—such as replacing spinlocks with mutexes—which introduces compatibility issues with paravirtualization. This also explains why the `PREEMPT_RT` patch failed in Dom0, as it is inherently a PV guest. Additionally, we attempted to configure Dom0 as a PVH guest; however, this setup resulted in continuous automatic reboots. Without access to system logs or graphical output to diagnose the root cause, we were unable to troubleshoot the error and ultimately abandoned this configuration. Consequently, for the subsequent tests, we replaced the RT kernel with the Low-Latency kernel in the DomU as well.
 
 ![Comparing HVM, PV and PVH guests - Credit2 Scheduler (No Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_nonoise.svg)
 
-### LOW LATENCY KERNEL AND REAL-TIME VM (PV DomU)
+### LOW LATENCY KERNEL AND LOW LATENCY VM (PV DomU)
 
-TODO: ADD
+This section analyzes the results obtained from a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, explicitly assessing a Paravirtualized (PV) guest. The configuration features a "Low Latency" kernel deployed on both the privileged domain (Dom0) and the unprivileged user domain (DomU). This test evaluates the baseline performance of the dynamic scheduler without static vCPU pinning and without any artificial stress workload applied to Dom0.
+
+#### Nominal Performance and Average Latency
+The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead and scheduling behavior in an undisturbed, unpinned PV configuration. The average latency recorded during the test was 37 µs, significantly higher than any other baseline average latency we recorded. The absolute minimum latency achieved was 4 µs.
+
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) provides insight into the system's baseline ability to bound execution delays. Over the duration of the test, the absolute maximum latency recorded was 525 µs.
+
+#### Observations on the Baseline PV Unpinned Environment
+The empirical data collected from this test yields the following observations regarding the behavior of the Low Latency PV DomU running on a Low Latency Dom0 without vCPU pinning in a quiet environment:
+
+*   **Bounded WCET:** The maximum latency was contained at 525 µs.
+*   **Baseline Jitter:** The average latency of 37 µs confirms the presence of scheduling jitter.
 
 ### LOW LATENCY KERNEL AND REAL-TIME VM (PVH DomU)
  
@@ -715,23 +727,35 @@ The empirical data collected from this test yields the following observations re
 *   **Bounded WCET:** The maximum latency was contained at 76 µs, indicating that the combination of the RT guest kernel and the Low Latency host kernel provides a stable upper bound when the host is not under load.
 *   **Baseline Jitter:** The average latency of 32 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This variability highlights the inherent impact of the dynamic Credit2 hypervisor scheduler, even without resource contention from a `stressdom0` workload.
 
-## Impact of the Stress Workload on Different Virtualization Technologies (TODO: REVIEW)
+## Impact of the Stress Workload on Different Virtualization Technologies
 
-To assess the influence of the underlying virtualization architecture on system determinism, this phase of testing introduces a background stress workload in the privileged domain (Dom0) while executing the `cyclictest` probe within PV and PVH guests. Building upon our earlier findings—which demonstrated that modern Hardware Virtual Machine (HVM) configurations successfully manage latency bounds without suffering from historical QEMU-induced preemption anomalies—this evaluation aims to compare how alternative virtualization models respond to resource contention.
+To assess the influence of the underlying virtualization architecture on system determinism, this phase of testing introduces a background stress workload in the privileged domain (Dom0) while executing the `cyclictest` probe within PV and PVH guests. Building upon our earlier findings—which demonstrated that modern Hardware Virtual Machine (HVM) configurations successfully manage latency bounds without suffering from historical QEMU-induced preemption anomalies—this evaluation aims to compare how alternative virtualization models respond to resource contention. Ultimately, the analysis highlights that while PVH and HVM achieve highly similar performance levels, the PV architecture exhibits the worst performance among all three technologies.
 
 Experimental analysis reveals that moving away from full hardware virtualization fundamentally alters the system dynamics, highlighting key architectural trade-offs when employing PV and PVH configurations:
 
 * **Absence of the Device Model:** Unlike HVM guests, PV and PVH architectures do not rely on a QEMU instance running in Dom0 for hardware emulation. While our previous tests confirmed that modern Xen deployments resolve the historical priority inversion bugs associated with QEMU, evaluating PV and PVH guests allows us to observe system behavior completely isolated from Device Model interactions.
-* **Constraints on Kernel Optimization:** While paravirtualization removes the Device Model variable, it introduces strict constraints regarding real-time optimizations. As established during the initial setup, the inherent incompatibility of the `PREEMPT_RT` patch with PV guests necessitated a fallback to a Low Latency kernel. This dynamic fundamentally shifts the performance bottleneck from hypervisor-level interference to guest-level scheduling limitations.
-* **Comparative Resilience to Contention:** Evaluating these paravirtualized environments under Dom0 stress provides a direct contrast to the HVM data. Without the ability to deploy a fully preemptible RT kernel in a PV DomU, these tests reveal whether the intrinsically lighter virtualization footprint of PV and PVH architectures can compensate for the lack of rigorous, real-time guest optimizations.
+* **Constraints on Kernel Optimization:** While paravirtualization removes the Device Model variable, it introduces strict constraints regarding real-time optimizations. As established during the initial setup, the inherent incompatibility of the `PREEMPT_RT` patch with PV guests necessitated a fallback to a Low Latency kernel. This dynamic fundamentally shifts the performance bottleneck from hypervisor-level interference to guest-level scheduling limitations, severely penalizing the PV configuration.
+* **Comparative Resilience to Contention:** Evaluating these paravirtualized environments under Dom0 stress provides a direct contrast to the HVM data. The empirical results reveal that the intrinsically lighter virtualization footprint of the PV architecture cannot compensate for the lack of rigorous, real-time guest optimizations, resulting in the poorest latency bounds. Conversely, the PVH architecture overcomes these limitations, demonstrating a resilience to contention and overall performance metrics that are remarkably similar to those of HVM.
 
 In this section, we present a detailed comparative analysis of these configurations, quantifying the execution latencies of PV and PVH guests under stress to determine their overall viability for predictable, latency-sensitive applications compared to their HVM counterparts.
 
 ![Comparing HVM, PV and PVH guests - Credit2 Scheduler (Backgroung Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_backgroundnoise.svg)
 
-### LOW LATENCY KERNEL AND REAL-TIME VM (PV DomU)
+### LOW LATENCY KERNEL AND LOW LATENCY VM (PV DomU)
 
-TODO: ADD
+This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, specifically evaluating a Paravirtualized (PV) guest. This configuration features a "Low Latency" kernel deployed on both the privileged domain (Dom0) and the unprivileged user domain (DomU). Crucially, this test was conducted without static vCPU pinning and while Dom0 was subjected to a significant background stress workload (`stressdom0`). The objective is to evaluate the latency characteristics and the impact of host-level contention when both domains utilize low-latency optimizations in an unpinned PV environment.
+
+#### Nominal Performance and Average Latency
+The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead and scheduling jitter under stress conditions. The average latency recorded during the test was 40 µs. The absolute minimum latency achieved was 4 µs. The histogram data indicates a broad distribution of execution latencies, demonstrating the variability introduced by the dynamic Credit2 scheduler when managing host-level contention without vCPU pinning.
+
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) provides insight into the system's ability to bound execution delays under stress. Over the duration of the test, the absolute maximum latency recorded was 312 µs.
+
+#### Observations on the Stressed PV Unpinned Environment
+The empirical data collected from this sustained test yields the following observations regarding the behavior of the Low Latency PV DomU running on a Low Latency Dom0 without vCPU pinning under `stressdom0`:
+
+*   **Bounded WCET:** The maximum latency was contained at 312 µs, indicating that the dual Low-Latency kernel setup provides a degree of stability under stress, preventing extreme multi-millisecond spikes despite the lack of pinning.
+*   **Stress-Induced Jitter:** The average latency of 40 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This highlights the impact of dynamic hypervisor scheduling and resource contention from the `stressdom0` workload on a PV guest.
 
 ### LOW LATENCY KERNEL AND REAL-TIME VM (PVH DomU)
  
@@ -741,10 +765,107 @@ This section details the analysis of a 5-minute execution of the `cyclictest` ut
 The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead and scheduling jitter inherent in this unpinned configuration. The average latency recorded during the test was 35 µs. The absolute minimum latency achieved was 3 µs. The histogram data indicates a broad distribution of execution latencies, demonstrating the variability introduced when dynamic scheduling is utilized under host-level contention.
  
 #### Worst-Case Execution Time (WCET) Analysis
-The analysis of the Worst-Case Execution Time (WCET) provides insight into the system's ability to bound execution delays under stress. Over the duration of the test, the absolute maximum latency recorded was 157 µs. Furthermore, the system successfully avoided any histogram overflows.
+The analysis of the Worst-Case Execution Time (WCET) provides insight into the system's ability to bound execution delays under stress. Over the duration of the test, the absolute maximum latency recorded was 157 µs.
  
 #### Observations on the PVH Unpinned Environment
 The empirical data collected from this sustained test yields the following observations regarding the behavior of the RT PVH DomU running on a Low Latency Dom0 without vCPU pinning:
  
 *   **Bounded WCET:** The maximum latency was contained at 157 µs, indicating that the combination of the RT guest kernel and the Low Latency host kernel provided a degree of stability, preventing the extreme, multi-millisecond spikes that can occur in less optimized configurations.
 *   **Hypervisor-Induced Jitter:** The average latency of 35 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This variability highlights the impact of dynamic hypervisor scheduling and resource contention from the `stressdom0` workload when vCPUs are not statically pinned to dedicated physical cores.
+
+## Comparative Analysis of PV and PVH Architectures under Static Allocation
+
+Following the initial investigations into dynamic scheduling behavior, this section presents a targeted comparative analysis of execution latencies between Paravirtualized (PV) and Hardware Virtual Machine with PV drivers (PVH) configurations. To eliminate the jitter introduced by complex fair-share algorithms and evaluate the highest degree of determinism achievable, these tests employ strict vCPU-to-pCPU pinning across both the privileged domain (Dom0) and the unprivileged user domain (DomU), effectively emulating the deterministic behavior of an offline NULL scheduler.
+
+The evaluation is conducted under ideal, unstressed conditions, isolating the system from external background workloads. By analyzing both PV and PVH DomU architectures in a quiet environment, we establish a clean baseline for the inherent virtualization overhead that persists even when static hardware allocation is employed. 
+
+This comparative approach aims to quantify the efficacy of strict hardware isolation in bounding the Worst-Case Execution Time (WCET). By observing the system's baseline predictability, the analysis highlights the specific architectural nuances between PV and PVH environments, demonstrating how effectively vCPU pinning manages nominal execution latencies prior to the introduction of external stress factors.
+
+![Comparing HVM, PV and PVH guests - Null Scheduler (No Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_null_nonoise.svg)
+
+
+### LOW LATENCY KERNEL AND LOW LATENCY VM  (PV DomU)
+
+This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, specifically evaluating a Paravirtualized (PV) guest. The configuration utilizes a "Low Latency" kernel for both the privileged domain (Dom0) and the unprivileged user domain (DomU). Crucially, this test evaluates the system emulating the static NULL scheduler with explicit vCPU pinning, and it is conducted in a quiet environment without any background `stressdom0` workload. The objective is to assess the baseline latency and determinism of a PV guest when fully optimized through static hardware allocation.
+
+#### Nominal Performance and Average Latency
+The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead in this optimized, pinned PV configuration. The average latency recorded during the test was 39 µs. The absolute minimum latency achieved was 5 µs. While pinning isolates the workload, the histogram indicates a spread in nominal execution times, confirming that baseline virtualization jitter persists even with a static scheduler.
+
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) highlights the system's ability to bound execution delays under ideal, unstressed conditions. Over the duration of the test, the absolute maximum latency recorded was 492 µs.
+
+#### Observations on the Baseline PV Pinned Environment (NULL Scheduler)
+The empirical data collected from this sustained test yields the following observations regarding the behavior of the Low Latency PV DomU running on a Low Latency Dom0 with static pinning using the NULL scheduler:
+
+*   **Bounded WCET:** The maximum latency was contained at 492 µs. While higher than fully patched RT configurations, this demonstrates a stable upper bound for a PV guest utilizing Low Latency kernels in a pinned environment.
+*   **Baseline Jitter:** The average latency of 39 µs indicates that the static allocation provided by the NULL scheduler does not completely eliminate the inherent scheduling jitter associated with the virtualization layer itself.
+
+### LOW LATENCY KERNEL AND REAL TIME VM (PVH DomU)
+
+This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, specifically evaluating a PVH guest. The configuration utilizes a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). Crucially, this test evaluates the system emulating the static NULL scheduler with explicit vCPU pinning, and it is conducted under a significant background stress workload (`stressdom0`). The objective is to assess the latency and determinism of a highly optimized PVH guest when fully isolated through static hardware allocation, even while the host domain is under duress.
+
+#### Nominal Performance and Average Latency
+The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead in this optimized, pinned PVH configuration under stress. The average latency recorded during the test was 33 µs. The absolute minimum latency achieved was 3 µs. While the stress workload is active on Dom0, the histogram indicates a tight distribution of nominal execution times, confirming that pinning effectively shields the guest from the majority of the host-level contention.
+
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) highlights the system's ability to rigidly bound execution delays, even under stress conditions. Over the duration of the test, the absolute maximum latency recorded was 71 µs.
+
+#### Observations on the Stressed PVH Pinned Environment (NULL Scheduler)
+The empirical data collected from this sustained test yields the following observations regarding the behavior of the RT PVH DomU running on a Low Latency Dom0 with static pinning using the NULL scheduler under `stressdom0`:
+
+*   **Strictly Bounded WCET:** The maximum latency was contained at 71 µs. This demonstrates an exceptionally stable upper bound for a PVH guest, proving that the combination of RT guest kernels, Low Latency host kernels, vCPU pinning, and the NULL scheduler can maintain hard real-time characteristics despite significant host-level stress.
+*   **Reduced Jitter:** The average latency of 33 µs and the tight spread of execution times indicate that the static allocation provided by the NULL scheduler successfully mitigates the scheduling jitter that would otherwise be induced by the `stressdom0` workload.
+
+## Impact of the Stress Workload on PV and PVH Architectures under Static Allocation
+
+Building upon the baseline established in the ideal, unstressed environment, this phase introduces a severe background stress workload (`stressdom0`) into the privileged control domain. The primary objective is to evaluate the resilience of static vCPU pinning—acting as a surrogate for the offline NULL scheduler—when the host system is heavily saturated with competing processes.
+
+By subjecting both the Paravirtualized (PV) and Hardware Virtual Machine with PV drivers (PVH) guests to this intense host-level contention, we can determine whether strict hardware isolation alone is sufficient to prevent latency spikes from degrading guest determinism. This evaluation specifically tests the boundaries of system predictability, observing the extent to which stress-induced jitter manages to bypass the static allocation and affect the isolated virtual CPUs.
+
+The subsequent analyses reveal a distinct divergence in architectural resilience under load. While vCPU pinning provides a foundational level of stability for both configurations, the empirical data highlights that the PV architecture remains susceptible to measurable interference from the host. Conversely, the PVH architecture demonstrates exceptional isolation, successfully shielding its critical execution paths and maintaining rigid Worst-Case Execution Time (WCET) boundaries despite the intense resource contention within Dom0.
+
+![Comparing HVM, PV and PVH guests - Null Scheduler (Backgroung Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_null_nonoise.svg)
+
+### LOW LATENCY KERNEL AND LOW LATENCY VM (PV DomU)
+
+This section analyzes the results obtained from a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, explicitly assessing a Paravirtualized (PV) guest. The configuration features a "Low Latency" kernel deployed on both the privileged domain (Dom0) and the unprivileged user domain (DomU). Crucially, this test evaluates the performance of the NULL scheduler with explicit vCPU pinning while Dom0 is subjected to a significant background stress workload (`stressdom0`). The objective is to evaluate the latency characteristics and the ability of the NULL scheduler's static allocation to manage host-level contention in an optimized, pinned PV environment.
+
+#### Nominal Performance and Average Latency
+The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead and scheduling behavior under stress conditions when utilizing the static NULL scheduler with pinning. The average latency recorded during the test was 39 µs. The absolute minimum latency achieved was 4 µs. The histogram data indicates a broad distribution of execution latencies, demonstrating the variability introduced by the `stressdom0` workload, even when a static, pinned scheduler is employed.
+
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) provides insight into the system's ability to bound execution delays under stress. Over the duration of the test, the absolute maximum latency recorded was 285 µs. 
+
+#### Observations on the Stressed PV Pinned Environment (NULL Scheduler)
+The empirical data collected from this sustained test yields the following observations regarding the behavior of the Low Latency PV DomU running on a Low Latency Dom0 with vCPU pinning under `stressdom0` using the NULL scheduler:
+
+*   **Bounded WCET:** The maximum latency was contained at 285 µs. This indicates that the combination of the dual Low-Latency kernel setup and the pinned NULL scheduler provides a degree of stability under stress, establishing a tighter bound than unpinned configurations.
+*   **Stress-Induced Jitter:** The average latency of 39 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This highlights that even with a statically pinned scheduler, resource contention from the `stressdom0` workload on a PV guest still significantly impacts latency stability.
+
+### LOW LATENCY KERNEL AND REAL-TIME VM (PVH DomU)
+
+This section analyzes the results obtained from a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, evaluating a Hardware Virtual Machine with Paravirtualized drivers (PVH) guest. The configuration features a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). Crucially, this test evaluates the performance of the NULL scheduler with explicit vCPU pinning while Dom0 is subjected to a background stress workload (`stressdom0`). The objective is to evaluate the latency characteristics and the ability of the NULL scheduler's static allocation to maintain determinism under host-level contention in an optimized, pinned PVH environment.
+
+#### Nominal Performance and Average Latency
+The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead and scheduling behavior under stress conditions when utilizing the static NULL scheduler with vCPU pinning. The average latency recorded during the test was 33 µs. The absolute minimum latency achieved was 3 µs. The data indicates a concentrated distribution of nominal execution times, demonstrating a high level of consistency despite the background load.
+
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) provides insight into the system's ability to rigidly bound execution delays under stress. Over the duration of the test, the absolute maximum latency recorded was strictly capped at 71 µs.
+
+#### Observations on the Stressed PVH Pinned Environment (NULL Scheduler)
+The empirical data collected from this sustained test yields the following observations regarding the behavior of the RT PVH DomU running on a Low Latency Dom0 with vCPU pinning under `stressdom0` using the NULL scheduler:
+
+*   **Strictly Bounded WCET:** The maximum latency was contained at 71 µs. This demonstrates that the combination of the `PREEMPT_RT` guest kernel, the Low-Latency host kernel, static vCPU pinning, and the NULL scheduler provides exceptional stability and successfully shields the critical guest execution path from severe preemption spikes.
+*   **Resilience to Host Stress:** The average latency of 33 µs and the rigid WCET boundary confirm that this highly optimized, static PVH configuration effectively mitigates the severe scheduling jitter typically induced by host-level resource contention.
+
+---
+
+To synthesize the findings from our latency evaluations, the following table aggregates the Worst-Case Execution Time (WCET) results recorded across the three evaluated Xen virtualization modes: Hardware Virtual Machine (HVM), Hardware Virtual Machine with Paravirtualized drivers (PVH), and fully Paravirtualized (PV) guests. 
+
+
+| Configurazione | HVM | PVH | PV | 
+|---|---|---|---|
+| **BASELINE** | 71 | 76 | 525 | 
+| **STRESS WORLOAD** | 209 | 157 | 312 | 
+| **vCPU PINNING BASELINE** | 65 | 71 | 492 |
+| **vCPU PINNING STRESS WORKLOAD** | 163 | 71 | 285 |
