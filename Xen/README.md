@@ -110,14 +110,15 @@ The empirical observation of this sustained test provides insights into the beha
 
 ## Impact of the Stress Workload on Latencies
 
-To evaluate system robustness and trigger potentially higher latencies, the testing methodology involves introducing an additional load, defined as a "stress workload". In the case of the Xen hypervisor, this stress workload is executed in the background within the privileged Dom0, utilizing the general-purpose `SCHED_OTHER` scheduling policy. 
+To evaluate system robustness and trigger potentially higher latencies, the testing methodology involves introducing an additional load, defined as a "stress workload". In the case of the Xen hypervisor, this stress workload is executed in the background within the privileged Dom0, utilizing the general-purpose `SCHED_OTHER` scheduling policy alongside the default Credit2 scheduler. 
 
 Experimental analysis has shown that adding this load to Dom0 does not produce a linear degradation of performance; rather, it reveals complex behaviors that depend strictly on the type of guest kernel and the virtualization technology employed:
 
-*   **Performance Variation Between NRT and RT Kernels:** Although the opposite might be expected, the stress workload only marginally affects a DomU configured with a Non-Real-Time (NRT) kernel, while causing a severe and counter-intuitive impact on a DomU configured with a Real-Time (RT) kernel. Executing the load in Dom0 caused the latency of an RT kernel in the DomU to increase drastically (rising, depending on the hardware, from approximately 1000 µs up to 4000 µs).
-*   **Role of the Virtualization Technology:** This anomalous relationship between the load in Dom0 and the increased latency in the DomU occurs specifically when using Hardware Virtual Machine (HVM) guests. Conversely, if guests with paravirtualization support (PV or PVH) are used, the stress workload running in Dom0 has barely any effect, allowing the RT kernel in the DomU to maintain better performance.
-*   **Interference with the Device Model (QEMU):** HVM guests require an instance of QEMU running in Dom0 to act as their Device Model (DM). The stress workload introduced in Dom0 risks preempting the DM process exactly when the DomU needs it to execute operations, thereby causing the observed latency spikes. This phenomenon indicates that an RT kernel within an HVM DomU interacts much more frequently with its Device Model compared to an NRT kernel.
-In this section we will reproduce the same experiments and analayze the results. 
+* **Persistent Virtualization Overhead:** Across every tested configuration, the average latency remains rigidly fixed at 35 µs. This demonstrates that the Xen hypervisor and the Credit2 scheduler introduce an inherent, structural baseline jitter that cannot be bypassed by domain-level kernel optimizations alone.
+* **Efficacy of Guest-Level Real-Time Optimizations:** Equipping the DomU with a Real-Time kernel successfully shields its critical sections, even when the system is under stress. Regardless of whether Dom0 is standard or optimized, an RT DomU consistently limits the Worst-Case Execution Time, capping maximum preemption spikes at 177 µs and 209 µs, respectively.
+* **Anomalous Impact of Low Latency Dom0 Tuning:** Modifying the Dom0 does not universally improve system determinism. Surprisingly, pairing a Low Latency Dom0 with a standard Non-Real-Time DomU yielded the poorest predictability of the test suite, resulting in severe latency spikes up to 526 µs. This indicates that Dom0 tuning without corresponding DomU optimization does not actually improve worst-case response times.
+
+In this section, we reproduce these stress experiments and analyze the detailed results to quantify the determinism achievable under the Credit2 scheduler.
 
 ![Performance under Stress Workload - Credit2 Scheduler](tests/plots/svg/xen_backgroundnoise.svg)
  
@@ -680,3 +681,70 @@ To quickly evaluate system stability, the following table exclusively reports th
 | **matrix1** | 9 | 8 | 45 | 11 |
 | **test3** | 8,414 | 8,885 | 14,786 | 10,037 |
 
+## PV and PVH DomUs
+
+In their previous work, Abeni and Faggioli concluded that in Xen, virtualization technology played a major role in scheduling latencies due to a priority inversion bug in how the Device Model operated. Specifically, they noted that the QEMU process acting as the DomU DM did not execute with high priority, allowing it to be preempted by the workload.
+
+We previously attempted to reproduce this issue using a newer version of Xen (4.17.3) but did not observe the same trend. We also tried assigning maximum priority to the QEMU process in Dom0, which yielded no noticeable improvement. Consequently, we concluded that this priority inversion bug has been fixed for HVM DomUs.
+
+To further verify this conclusion, we extended our analysis to PV and PVH guests. In this section, we reproduce the most relevant scenarios for guests running on these different virtualization technologies and analyze their resulting behaviors.
+
+### PV DomU and RT Kernel
+
+While configuring the PV guest, we encountered the same issue observed during the [initial setup process](../Setup/README.md#problems-with-preempt_rt). This time, because the output logs were routed to the terminal, we were able to identify the cause. The logs revealed a **soft CPU lockup**, confirming that the issue stemmed from the `PREEMPT_RT` patch. We hypothesize that this failure relates to how the patch modifies low-level mechanisms—such as replacing spinlocks with mutexes—which introduces compatibility issues with paravirtualization. This also explains why the `PREEMPT_RT` patch failed in Dom0, as it is inherently a PV guest. Additionally, we attempted to configure Dom0 as a PVH guest; however, this setup resulted in continuous automatic reboots. Without access to system logs or graphical output to diagnose the root cause, we were unable to troubleshoot the error and ultimately abandoned this configuration. Consequently, for the subsequent tests, we replaced the RT kernel with the Low-Latency kernel in the DomU as well.
+
+![Comparing HVM, PV and PVH guests - Credit2 Scheduler (No Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_nonoise.svg)
+
+### LOW LATENCY KERNEL AND REAL-TIME VM (PV DomU)
+
+TODO: ADD
+
+### LOW LATENCY KERNEL AND REAL-TIME VM (PVH DomU)
+ 
+This section analyzes the results obtained from a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, explicitly assessing a PVH guest. The configuration features a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). This test evaluates the baseline performance of the dynamic Credit2 scheduler without static vCPU pinning and without any artificial stress workload applied to Dom0.
+ 
+#### Nominal Performance and Average Latency
+The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead and scheduling behavior in an undisturbed, unpinned configuration. The average latency recorded during the test was 32 µs. The absolute minimum latency achieved was 3 µs. The histogram data indicates a broad distribution of execution latencies, demonstrating the variability introduced by dynamic scheduling even in the absence of host-level contention.
+ 
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) provides insight into the system's baseline ability to bound execution delays. Over the duration of the test, the absolute maximum latency recorded was 76 µs. The system successfully avoided any histogram overflows.
+ 
+#### Observations on the Baseline PVH Unpinned Environment
+The empirical data collected from this test yields the following observations regarding the behavior of the RT PVH DomU running on a Low Latency Dom0 without vCPU pinning in a quiet environment:
+ 
+*   **Bounded WCET:** The maximum latency was contained at 76 µs, indicating that the combination of the RT guest kernel and the Low Latency host kernel provides a stable upper bound when the host is not under load.
+*   **Baseline Jitter:** The average latency of 32 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This variability highlights the inherent impact of the dynamic Credit2 hypervisor scheduler, even without resource contention from a `stressdom0` workload.
+
+## Impact of the Stress Workload on Different Virtualization Technologies (TODO: REVIEW)
+
+To assess the influence of the underlying virtualization architecture on system determinism, this phase of testing introduces a background stress workload in the privileged domain (Dom0) while executing the `cyclictest` probe within PV and PVH guests. Building upon our earlier findings—which demonstrated that modern Hardware Virtual Machine (HVM) configurations successfully manage latency bounds without suffering from historical QEMU-induced preemption anomalies—this evaluation aims to compare how alternative virtualization models respond to resource contention.
+
+Experimental analysis reveals that moving away from full hardware virtualization fundamentally alters the system dynamics, highlighting key architectural trade-offs when employing PV and PVH configurations:
+
+* **Absence of the Device Model:** Unlike HVM guests, PV and PVH architectures do not rely on a QEMU instance running in Dom0 for hardware emulation. While our previous tests confirmed that modern Xen deployments resolve the historical priority inversion bugs associated with QEMU, evaluating PV and PVH guests allows us to observe system behavior completely isolated from Device Model interactions.
+* **Constraints on Kernel Optimization:** While paravirtualization removes the Device Model variable, it introduces strict constraints regarding real-time optimizations. As established during the initial setup, the inherent incompatibility of the `PREEMPT_RT` patch with PV guests necessitated a fallback to a Low Latency kernel. This dynamic fundamentally shifts the performance bottleneck from hypervisor-level interference to guest-level scheduling limitations.
+* **Comparative Resilience to Contention:** Evaluating these paravirtualized environments under Dom0 stress provides a direct contrast to the HVM data. Without the ability to deploy a fully preemptible RT kernel in a PV DomU, these tests reveal whether the intrinsically lighter virtualization footprint of PV and PVH architectures can compensate for the lack of rigorous, real-time guest optimizations.
+
+In this section, we present a detailed comparative analysis of these configurations, quantifying the execution latencies of PV and PVH guests under stress to determine their overall viability for predictable, latency-sensitive applications compared to their HVM counterparts.
+
+![Comparing HVM, PV and PVH guests - Credit2 Scheduler (Backgroung Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_backgroundnoise.svg)
+
+### LOW LATENCY KERNEL AND REAL-TIME VM (PV DomU)
+
+TODO: ADD
+
+### LOW LATENCY KERNEL AND REAL-TIME VM (PVH DomU)
+ 
+This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, explicitly assessing a PVH guest. The configuration features a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). Crucially, this test was conducted without static vCPU pinning and while Dom0 was subjected to a significant background stress workload. The objective is to evaluate the latency characteristics and virtualization overhead introduced by the hypervisor when managing a PVH guest under these specific, unpinned stress conditions.
+ 
+#### Nominal Performance and Average Latency
+The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead and scheduling jitter inherent in this unpinned configuration. The average latency recorded during the test was 35 µs. The absolute minimum latency achieved was 3 µs. The histogram data indicates a broad distribution of execution latencies, demonstrating the variability introduced when dynamic scheduling is utilized under host-level contention.
+ 
+#### Worst-Case Execution Time (WCET) Analysis
+The analysis of the Worst-Case Execution Time (WCET) provides insight into the system's ability to bound execution delays under stress. Over the duration of the test, the absolute maximum latency recorded was 157 µs. Furthermore, the system successfully avoided any histogram overflows.
+ 
+#### Observations on the PVH Unpinned Environment
+The empirical data collected from this sustained test yields the following observations regarding the behavior of the RT PVH DomU running on a Low Latency Dom0 without vCPU pinning:
+ 
+*   **Bounded WCET:** The maximum latency was contained at 157 µs, indicating that the combination of the RT guest kernel and the Low Latency host kernel provided a degree of stability, preventing the extreme, multi-millisecond spikes that can occur in less optimized configurations.
+*   **Hypervisor-Induced Jitter:** The average latency of 35 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This variability highlights the impact of dynamic hypervisor scheduling and resource contention from the `stressdom0` workload when vCPUs are not statically pinned to dedicated physical cores.
