@@ -323,13 +323,64 @@ The empirical observation of this execution provides critical insight into the l
 
 ---
 
-Following the detailed analysis of each individual scenario, the table below provides a consolidated overview of the Worst-Case Execution Time (WCET) measurements. It allows for a direct comparison across all four task configurations (**NRT-NRT**, **NRT-RT**, **RT-NRT**, and **RT-RT**) under the three tested conditions: standard execution (**BASELINE**), heavy system load (**STRESSHOST**), and load with isolation mechanisms applied (**STRESSHOST ISOLATED**).
+Following the detailed analysis of each individual scenario, the table below provides a consolidated overview of the Worst-Case Execution Time (WCET) measurements. It allows for a direct comparison across all four kernel configurations (**NRT-NRT**, **NRT-RT**, **RT-NRT**, and **RT-RT**) under the three tested conditions: standard execution (**BASELINE**), heavy system load in the control domain (**STRESS DOM0**), and load with isolation mechanisms applied (**STRESS DOM0 ISOLATED**).
+
+Furthermore, alongside the WCET table, this section presents a detailed breakdown of the percentage increments for both the maximum latency (WCET) and the average latency (expressed as Mean $\pm$ Standard Deviation). This provides a precise quantitative analysis of the performance degradation induced by the stress workload compared to the baseline for each specific scenario.
 
 | Configuration | NRT-NRT | NRT-RT | RT-NRT | RT-RT |
 |---|---|---|---|---|
 | **BASELINE** | 602 | 6114 | 93 | 81 |
 | **STRESSHOST** | 44409 | 51069 | 50257 | 9829 |
 | **STRESSHOST ISOLATED** | 2024 | 2299 | 1502 | 1935 |
+
+
+### NRT NRT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Average ± SD** | 7.10 ± 2.39 µs | 13.60 ± 11.18 µs |
+| **WCET (Max)** | 602 µs | 44409 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +91.50%
+* WCET Increment: +7276.91%
+
+---
+
+### NRT RT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Average ± SD** | 8.55 ± 3.27 µs | 13.69 ± 12.00 µs |
+| **WCET (Max)** | 6114 µs | 51069 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +60.10%
+* WCET Increment: +735.28%
+---
+
+### RT NRT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Average ± SD** | 7.22 ± 0.98 µs | 13.33 ± 8.54 µs |
+| **WCET (Max)** | 93 µs | 50257 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +84.76%
+* WCET Increment: +53939.78%
+---
+
+### RT RT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Average ± SD** | 8.15 ± 1.15 µs | 11.84 ± 12.79 µs |
+| **WCET (Max)** | 81 µs | 9829 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +45.20%
+* WCET Increment: +12034.57%
 
 ## TACLe Benchmark
 
@@ -573,6 +624,8 @@ The KVM "Big Noise Pinned" baseline demonstrates the critical importance of CPU 
 ### Max Latency Summary (μs)
 To quickly evaluate system stability, the following table exclusively reports the peak values (**Max Latency**). This format allows for an at-a-glance comparison of the Worst-Case Execution Time across the four operational scenarios, directly highlighting the impact of noise and the effectiveness of CPU pinning in containing interference.
 
+Furthermore, alongside the WCET summary, this section now includes a detailed breakdown of the percentage increments for both the average latency (expressed as Mean $\pm$ Standard Deviation) and the maximum latency (WCET). This addition provides a precise quantitative analysis of the performance degradation induced by the heavy background noise compared to the baseline execution for each individual benchmark.
+
 | Benchmark | Baseline | Small Noise | Big Noise | Big Noise Pinned |
 | --- | --- | --- | --- | --- |
 | **DEBIE** | 32,409 | 30,872 | 43,849 | 37,284 |
@@ -580,3 +633,66 @@ To quickly evaluate system stability, the following table exclusively reports th
 | **lift** | 61 | 58 | 280 | 67 |
 | **matrix1** | 1 | 0 | 6 | 1 |
 | **test3** | 9,471 | 8,612 | 9,458 | 10,996 |
+
+### DEBIE
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 27214.36 ± 1303.61 µs | 28845.81 ± 3813.54 µs |
+| **WCET (Max)** | 32409 µs | 43849 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +5.99%
+* WCET Increment: +35.30%
+
+---
+
+### HUFFENC
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 16.02 ± 3.39 µs | 26.21 ± 5.01 µs |
+| **WCET (Max)** | 64 µs | 69 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +63.63%
+* WCET Increment: +7.81%
+
+---
+
+### LIFT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 19.44 ± 3.00 µs | 19.42 ± 3.00 µs |
+| **WCET (Max)** | 61 µs | 280 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: -0.07%
+* WCET Increment: +359.02%
+
+---
+
+### MATRIX1
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 0.00 ± 0.00 µs | 0.00 ± 0.01 µs |
+| **WCET (Max)** | 1 µs | 6 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +600.00%
+* WCET Increment: +500.00%
+
+---
+
+### TEST3
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 8363.95 ± 31.59 µs | 8457.93 ± 52.13 µs |
+| **WCET (Max)** | 9471 µs | 9458 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +1.12%
+* WCET Increment: -0.14%
