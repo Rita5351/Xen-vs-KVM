@@ -128,7 +128,7 @@ These latency spikes—the "long tails" observed in the distribution logs—are 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a hybrid environment, configured with a Real-Time optimized guest hosted on a Standard Linux Kernel Host. The goal of this analysis is to evaluate if the guest's internal real-time scheduling can maintain determinism during sustained workloads when the underlying host hypervisor lacks real-time optimizations.
 
 ### Nominal Performance and Average Latency
-The data collected confirm that optimization at the Host hypervisor level guarantees excellent efficiency in the average case. The average latency value is extremely stable, resting at 8 µs for the duration of the 5-minute test. Furthermore, the absolute minimum latency dropped down to 4 µs. This behavior indicates that the Real-Time host allocates VCPU resources to the guest promptly and with minimal virtualization overhead under normal operating conditions.
+The data collected confirm that optimization at the guest level guarantees excellent efficiency in the average case. The average latency value is extremely stable, resting at 8 µs for the duration of the 5-minute test. Furthermore, the absolute minimum latency dropped down to 4 µs. This behavior indicates that the host allocates VCPU resources to the guest promptly and with minimal virtualization overhead under normal operating conditions despite not being patched.
 
 ### Worst-Case Execution Time (WCET) Analysis
 Despite the high baseline efficiency of the underlying infrastructure, the analysis of the Worst-Case Execution Time (WCET) reveals a severe lack of determinism under sustained testing. The recorded maximum latency reached an extreme peak of 6114 µs (over 6 milliseconds), and other 3 over-milliseconds spikes. This data indicates that while the system performs well nominally, it is subject to rare but catastrophic scheduling delays that shatter any real-time guarantees.
@@ -142,13 +142,13 @@ Therefore, to obtain reliable determinism in control contexts, the use of an RT 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a hybrid environment, configured with a  Standard Linux Guest hosted on a Real-Time `PREEMPT_RT` patched Host. The goal of this analysis is to verify whether the use of a deterministic Host hypervisor is sufficient to guarantee strict temporal constraints during sustained workloads when the guest operating system remains general-purpose.
 
 ### Nominal Performance and Average Latency
-The data collected confirms exceptional baseline efficiency. The average latency value is strictly maintained at 7 µs for the entire duration of the 5-minute test. Furthermore, the absolute minimum latency recorded was 5 µs. The histogram distribution reveals a massive concentration around the mode, with over 92% of execution cycles completing in exactly 7 µs. This behavior indicates that the `PREEMPT_RT` patch effectively minimizes internal scheduling jitter, processing tasks extremely efficiently when the Virtual CPU (VCPU) is active.
+The data collected confirm that optimization at the Guest OS level guarantees excellent efficiency in the average case. The average latency value is extremely stable, resting at 8 µs for the duration of the 5-minute test. Furthermore, the absolute minimum latency dropped down to 4 µs. This behavior indicates that the Real-Time guest handles thread scheduling promptly and with minimal overhead under normal operating conditions.
 
 ### Worst-Case Execution Time (WCET) Analysis
 The analysis of the Worst-Case Execution Time (WCET) reveals highly stable and deterministic behavior during this sustained test. The absolute maximum latency recorded reached a peak of only 93 µs. This data demonstrates a complete absence of the severe, prolonged hypervisor-induced preemption spikes that typically characterize standard host environments.
 
 ### Conclusions on the Hybrid Environment
-The empirical observation of this sustained 5-minute test demonstrates that optimizing the Host OS with a `PREEMPT_RT` kernel yielded remarkably robust determinism, even while running on a Non-Real-Time Guest. By successfully bounding the WCET strictly under 100 µs (peaking at 93 µs) and entirely avoiding latency overflows, the guest managed to maintain a highly predictable execution environment.
+The empirical observation of this sustained 5-minute test demonstrates conclusively that the exclusive optimization of the guest operating system is not able to stem anomalous latencies if the virtualization infrastructure (Hypervisor/Host) is not equally optimized. The critical peak of over 6 milliseconds is a direct symptom of the internal architecture of the standard host kernel. The absence of the `PREEMPT_RT` patch on the host leaves the guest vulnerable to delays induced by the host's non-preemptible critical sections (such as spinlocks), non-deferrable hardware interrupts, and unbounded priority inversion phenomena.
 
 ## REAL-TIME HOST AND REAL-TIME GUEST (FULL RT STACK)
 
@@ -167,6 +167,8 @@ The empirical observation of this sustained test provides conclusive evidence re
 *   **Absolute Stability:** The system maintained a strict upper bound of 81 µs over nearly 6 million consecutive execution cycles.
 *   **Zero Overflows:** The complete absence of histogram overflows confirms that the system never experienced uncontrolled latency spikes during the prolonged execution.
 *   **Viability for Critical Systems:** This "Full RT" configuration establishes a highly predictable WCET, proving that with proper infrastructure tuning, virtualized environments can reliably support safety-critical control applications that previously required dedicated bare-metal hardware.
+
+![Baseline Performance - KVM ](tests/plot/svg/KVM_baseline_boxplot.svg)
 
 ## Impact of the Stress Workload on Latencies
 
@@ -235,6 +237,8 @@ Despite the excellent average case, the analysis of the Worst-Case Execution Tim
 The empirical observation of this execution demonstrates severe latency instability, which is particularly critical given the system's strict configuration. Despite this optimal prioritization, the system still suffered from chronic and significant delays.
 
 These high latencies indicate that the delays are originating from deeper, non-preemptible sources escaping the guest's control. Consequently, this configuration proves that merely applying the maximum scheduler priority is fundamentally insufficient to guarantee the strict, reliable upper bounds required for safety-critical real-time applications.
+
+![Performance under stress workload- KVM at maximum priority](tests/plot/svg/KVM_Stress_Workload_boxplot.svg)
 
 ## ISOLATED STRESS HOST PERFORMANCE ANALYSIS
 
@@ -315,11 +319,13 @@ Despite the optimal software stack and spatial isolation, the Worst-Case Executi
 
 The empirical observation of this execution provides critical insight into the limits of virtualization determinism. Combining a Full RT stack with CPU isolation successfully mitigated the severe, multi-millisecond starvation caused by host stress, keeping the WCET under 2 milliseconds. However, the persistence of 14 overflows and a 1.9-millisecond peak proves that strict determinism is not perfectly guaranteed.
 
+![Performance under stress- KVM OS-level isolation ](tests/plot/svg/KVM_ISOLATED_STRESS_HOST_boxplot.svg)
+
 ---
 
 Following the detailed analysis of each individual scenario, the table below provides a consolidated overview of the Worst-Case Execution Time (WCET) measurements. It allows for a direct comparison across all four task configurations (**NRT-NRT**, **NRT-RT**, **RT-NRT**, and **RT-RT**) under the three tested conditions: standard execution (**BASELINE**), heavy system load (**STRESSHOST**), and load with isolation mechanisms applied (**STRESSHOST ISOLATED**).
 
-| Configurazione | NRT-NRT | NRT-RT | RT-NRT | RT-RT |
+| Configuration | NRT-NRT | NRT-RT | RT-NRT | RT-RT |
 |---|---|---|---|---|
 | **BASELINE** | 602 | 6114 | 93 | 81 |
 | **STRESSHOST** | 44409 | 51069 | 50257 | 9829 |

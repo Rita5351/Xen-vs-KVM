@@ -237,12 +237,12 @@ This section analyzes the results obtained from a single, prolonged 5-minute exe
 The data collected reveals a noticeable baseline overhead introduced by the virtualization layer. The average latency remained stable at 32 µs throughout the test duration. While the absolute minimum latency recorded was 3 µs, the results demonstrate a wide variance in nominal execution times.
 
 #### Worst-Case Execution Time (WCET) Analysis
-The analysis of the Worst-Case Execution Time (WCET) indicates that the Null scheduler provides a far more strictly bounded execution environment compared to general-purpose algorithms. Over the 5-minute continuous test, the absolute maximum latency recorded was bounded at 179 µs. The data shows that by avoiding complex fair-share preemption, the system completely avoids catastrophic, multi-millisecond preemption spikes.
+The analysis of the Worst-Case Execution Time (WCET) indicates that the Null scheduler provides a far more strictly bounded execution environment compared to general-purpose algorithms. Over the 5-minute continuous test, the absolute maximum latency recorded was bounded at 137 µs. The data shows that by avoiding complex fair-share preemption, the system completely avoids catastrophic, multi-millisecond preemption spikes.
 
 #### Observations on the Xen Null Environment
 The empirical observation of this sustained test provides insights into the behavior of the Xen hypervisor when using the Null scheduler:
 
-* **Improved Upper Bound:** The system bounded the WCET to 179 µs, which demonstrates that the static resource allocation of the Null scheduler significantly reduces unbounded latency starvation.
+* **Improved Upper Bound:** The system bounded the WCET to 137 µs, which demonstrates that the static resource allocation of the Null scheduler significantly reduces unbounded latency starvation.
 * **Average Jitter:** The average latency of 32 µs highlights that the baseline virtualization jitter remains, despite the absence of a dynamic scheduling algorithm.
 * **Suitability:** This configuration demonstrates much better predictability for latency-sensitive tasks than standard schedulers, offering a much lower peak latency.
 
@@ -251,16 +251,16 @@ The empirical observation of this sustained test provides insights into the beha
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the Null scheduler. The configuration features a standard (Non-Real-Time) Linux Dom0 and a `PREEMPT_RT` patched DomU. The objective is to observe how effectively the guest's internal scheduling can manage execution times when provided with a dedicated, non-preempted virtual CPU by the hypervisor.
 
 #### Nominal Performance and Average Latency
-The data collected reveals that the baseline virtualization overhead heavily influences average execution times. The average latency recorded was 33 µs. The absolute minimum latency achieved was very low at just 3 µs.
+The data collected reveals that the baseline virtualization overhead heavily influences average execution times. The average latency recorded was 32 µs. The absolute minimum latency achieved was very low at just 3 µs.
 
 #### Worst-Case Execution Time (WCET) Analysis
-Despite the average jitter introduced by the hypervisor, the analysis of the Worst-Case Execution Time (WCET) demonstrates excellent stability at the upper bounds. Over the entire 5-minute sustained test, the absolute maximum latency was capped at 65 µs. This indicates that the system avoided preemption spikes and handled critical sections with high determinism.
+Despite the average jitter introduced by the hypervisor, the analysis of the Worst-Case Execution Time (WCET) demonstrates excellent stability at the upper bounds. Over the entire 5-minute sustained test, the absolute maximum latency was capped at 67 µs. This indicates that the system avoided preemption spikes and handled critical sections with high determinism.
 
 #### Observations on the Hybrid Xen Environment
 The empirical observation of this sustained test provides insights into the behaviour of the RT DomU with a Non-RT Dom0 and the Null scheduler:
 
-* **Bounded WCET:** By tightly capping the absolute maximum latency at 65 µs, the `PREEMPT_RT` guest kernel showed high effectiveness in establishing a highly predictable upper bound.
-* **Hypervisor-Induced Jitter:** The average latency of 33 µs suggests that the inherent virtualization layer jitter cannot be entirely removed by guest-side optimizations.
+* **Bounded WCET:** By tightly capping the absolute maximum latency at 67 µs, the `PREEMPT_RT` guest kernel showed high effectiveness in establishing a highly predictable upper bound.
+* **Hypervisor-Induced Jitter:** The average latency of 32 µs suggests that the inherent virtualization layer jitter cannot be entirely removed by guest-side optimizations.
 * **Internal Determinism:** In this hybrid configuration, the guest-level real-time optimizations successfully maintained strict temporal constraints, heavily benefiting from the static CPU assignment of the Null scheduler.
 
 ### LOW LATENCY KERNEL AND NON-REAL-TIME VM (NULL SCHEDULER)
@@ -271,31 +271,31 @@ This section analyzes the results obtained from a single, prolonged 5-minute exe
 The data collected confirms the consistent baseline behavior of the Xen infrastructure. The average latency remained at 32 µs throughout the entire 5-minute test. The absolute minimum latency achieved was 3 µs. 
 
 #### Worst-Case Execution Time (WCET) Analysis
-The analysis of the Worst-Case Execution Time (WCET) suggests tangible benefits from this configuration. Over the sustained execution, the absolute maximum latency was bounded at 137 µs. This result indicates that the low-latency optimizations within the Dom0, paired with the Null scheduler, helped to further mitigate severe preemption spikes compared to a standard Dom0 kernel.
+The analysis of the Worst-Case Execution Time (WCET) suggests tangible benefits from this configuration. Over the sustained execution, the absolute maximum latency was bounded at 179 µs. This result indicates that the low-latency optimizations within the Dom0, paired with the Null scheduler, helped to further mitigate severe preemption spikes compared to a standard Dom0 kernel.
 
 #### Observations on the Low Latency Xen Environment
 The empirical observation of this sustained test provides insights into the capabilities of a Low Latency Dom0 running with a NRT DomU and the Null scheduler:
 
-* **Predictable Upper Bounds:** The Low Latency kernel tuning bounded the WCET to 137 µs during the test.
+* **Predictable Upper Bounds:** The Low Latency kernel tuning bounded the WCET to 179 µs during the test.
 * **Persistent Hypervisor Jitter:** The average latency of 32 µs confirms that the baseline virtualization overhead dictates the nominal jitter.
-* **Suitability:** This configuration presents a solid improvement in maximum latency over the strictly NRT environment (reducing the peak from 179 µs down to 137 µs), offering enhanced predictability without patching the guest.
+* **Suitability:** This configuration presents a higher maximum latency compared to the strictly NRT environment (179 µs versus 137 µs), indicating that the Low Latency Dom0 tuning alone does not necessarily improve the worst-case bounds for a Non-Real-Time guest under static allocation.
 
 ### LOW LATENCY KERNEL AND REAL-TIME VM (NULL SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the Null scheduler. This specific configuration features a Low Latency kernel Dom0 and a Real-Time (`PREEMPT_RT`) DomU.
 
 #### Nominal Performance and Average Latency
-The data collected reveals that the baseline virtualization overhead continues to define the average execution times. The average latency recorded was 32 µs. The absolute minimum latency was recorded at 3 µs. 
+The data collected reveals that the baseline virtualization overhead continues to define the average execution times. The average latency recorded was 33 µs. The absolute minimum latency was recorded at 3 µs. 
 
 #### Worst-Case Execution Time (WCET) Analysis
-The analysis of the Worst-Case Execution Time (WCET) demonstrates immense stability at the upper limits. Over the entire 5-minute sustained test, the absolute maximum latency was strictly capped at 67 µs. This indicates a complete absence of the severe preemption delays that typically affect standard virtual environments.
+The analysis of the Worst-Case Execution Time (WCET) demonstrates immense stability at the upper limits. Over the entire 5-minute sustained test, the absolute maximum latency was strictly capped at 65 µs. This indicates a complete absence of the severe preemption delays that typically affect standard virtual environments.
 
 #### Observations on the Low Latency RT Hybrid Xen Environment
 The empirical observation of this sustained test provides insights into the behaviour of a RT DomU with a Low Latency Dom0 and the Null scheduler:
 
-* **Bounded WCET:** By capping the absolute maximum latency at 67 µs, the guest kernel proved highly effective at establishing a deterministic upper bound when isolated on a dedicated virtual CPU.
-* **Hypervisor-Induced Jitter:** The consistent average latency of 32 µs confirms that the underlying virtualization architecture introduces inherent, unavoidable jitter.
-* **Effective Internal Determinism:** The guest-level optimizations are sufficient to maintain extremely tight temporal constraints. The maximum latency performance remains robust and stable, mirroring the results achieved with a standard Dom0 (67 µs versus 65 µs).
+* **Bounded WCET:** By capping the absolute maximum latency at 65 µs, the guest kernel proved highly effective at establishing a deterministic upper bound when isolated on a dedicated virtual CPU.
+* **Hypervisor-Induced Jitter:** The consistent average latency of 33 µs confirms that the underlying virtualization architecture introduces inherent, unavoidable jitter.
+* **Effective Internal Determinism:** The guest-level optimizations are sufficient to maintain extremely tight temporal constraints. The maximum latency performance remains robust and stable, mirroring the results achieved with a standard Dom0 (65 µs versus 67 µs).
 
 ## Impact of the Stress Workload on Latencies with vCPU PINNING
 
@@ -304,7 +304,7 @@ To evaluate system determinism and upper latency bounds under severe conditions,
 Experimental analysis demonstrates that while isolating resources via static pinning establishes a baseline of predictability, the system's Worst-Case Execution Time (WCET) is not uniform; rather, it reveals behaviors that depend strictly on the specific combination of kernel optimizations applied across the domains:
 
 * **Efficacy of DomU Real-Time Patches:** Applying `PREEMPT_RT` patches to the DomU drastically reduces maximum latency spikes, even when the control domain is under stress. While an unoptimized DomU suffers from stress-induced delays peaking at 443 µs, an RT-optimized DomU successfully shields its critical sections, capping the WCET to 76 µs even when paired with an unoptimized Dom0.
-* **Impact of Dom0 Kernel Tuning:** The kernel configuration of the control domain plays a vital role in mitigating severe preemption events. Upgrading Dom0 to a Low Latency kernel significantly improves overall system bounds, cutting the maximum latency for a standard DomU by more than half (from 443 µs to 179 µs) and pushing an RT DomU to the tightest recorded bound of 65 µs.
+* **Impact of Dom0 Kernel Tuning:** The kernel configuration of the control domain plays a vital role in mitigating severe preemption events. Upgrading Dom0 to a Low Latency kernel significantly improves overall system bounds, cutting the maximum latency for a standard DomU by more than half (from 443 µs to 179 µs) and pushing an RT DomU to a recorded bound of 163 µs.
 * **Persistent Virtualization Overhead:** Despite the dramatic improvements in maximum latency achieved through kernel patches and core pinning, the average latency remains rigidly fixed at approximately 32–33 µs across every tested configuration. This phenomenon indicates that the baseline jitter introduced by the Xen hypervisor layer is a structural constant that cannot be bypassed by domain-level scheduling optimizations alone.
 
 In this section, we will analyze the detailed results of these specific configurations to quantify the determinism and virtualization overhead achievable in a statically pinned Xen architecture.
@@ -364,16 +364,16 @@ The empirical observation of this sustained test provides insights into the capa
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing static vCPU pinning. This specific configuration features a Low Latency kernel Dom0 and a Real-Time (`PREEMPT_RT`) DomU, evaluated under stress conditions.
  
 #### Nominal Performance and Average Latency
-The data collected reveals that the baseline virtualization overhead continues to define the average execution times. The average latency recorded was 33 µs. The absolute minimum latency was recorded at 3 µs.
+The data collected reveals that the baseline virtualization overhead continues to define the average execution times. The average latency recorded was 32 µs. The absolute minimum latency was recorded at 3 µs.
  
 #### Worst-Case Execution Time (WCET) Analysis
-The analysis of the Worst-Case Execution Time (WCET) demonstrates immense stability at the upper limits. Over the entire 5-minute sustained test, the absolute maximum latency was strictly capped at 65 µs. This indicates a complete absence of the severe preemption delays that typically affect standard virtual environments, representing the most optimized bounding in this test suite.
+The analysis of the Worst-Case Execution Time (WCET) demonstrates good stability at the upper limits. Over the entire 5-minute sustained test, the absolute maximum latency was capped at 163 µs. While this represents a notable increase from the unstressed baseline of 65 µs, the system still avoids the catastrophic, multi-millisecond preemption spikes observed in unoptimized configurations.
  
 #### Observations on the Low Latency RT Hybrid Xen Environment
 The empirical observation of this sustained test provides insights into the behaviour of a RT DomU with a Low Latency Dom0 and static pinning:
-* **Bounded WCET:** By capping the absolute maximum latency at 65 µs, the DomU kernel proved highly effective at establishing a deterministic upper bound when isolated on a dedicated physical core.
-* **Hypervisor-Induced Jitter:** The consistent average latency of 33 µs confirms that the underlying virtualization architecture introduces inherent, unavoidable jitter, irrespective of kernel patches.
-* **Effective Internal Determinism:** The DomU-level optimizations, combined with the Low Latency Dom0, are sufficient to maintain extremely tight temporal constraints, providing robust and stable maximum latency performance.
+* **Bounded WCET:** By capping the absolute maximum latency at 163 µs, the DomU kernel maintained a bounded execution environment, though the stress workload on Dom0 caused a measurable increase from the 65 µs baseline.
+* **Hypervisor-Induced Jitter:** The consistent average latency of 32 µs confirms that the underlying virtualization architecture introduces inherent, unavoidable jitter, irrespective of kernel patches.
+* **Effective Internal Determinism:** The DomU-level optimizations, combined with the Low Latency Dom0, successfully contain the worst-case latency well below the levels observed in non-RT configurations, demonstrating the value of guest-level real-time optimizations even under host-level stress.
 
 
 ## Analysis of Device Model priority inversion in modern Xen
@@ -414,10 +414,10 @@ This behavior indicates that modern Xen HVM implementations successfully decoupl
 ---
 Following the detailed analysis of each individual scenario, the table below provides a consolidated overview of the Worst-Case Execution Time (WCET) measurements. It allows for a direct comparison across all four Dom0-DomU kernel configurations (**NRT-NRT**, **NRT-RT**, **LL-NRT**, and **LL-RT**) under the four tested scheduling and load conditions: standard dynamic execution (**BASELINE**), execution under heavy system load within Dom0 (**STRESS WORKLOAD**), execution with static core isolation (**vCPU PINNING BASELINE**), and isolated execution under heavy load (**vCPU PINNING STRESS WORKLOAD**).
 
-| Configurazione | NRT-NRT | NRT-RT | LL-NRT | LL-RT |
+| Configuration | NRT-NRT | NRT-RT | LL-NRT | LL-RT |
 |---|---|---|---|---|
 | **BASELINE** | 369 | 74 | 152 | 71 |
-| **STRESS WORLOAD** | 239 | 177 | 526 | 209 |
+| **STRESS WORKLOAD** | 239 | 177 | 526 | 209 |
 | **vCPU PINNING BASELINE** | 137 | 67 | 179 | 65 |
 | **vCPU PINNING STRESS WORKLOAD** | 443 | 76 | 410 | 163 |
 
@@ -739,7 +739,7 @@ Experimental analysis reveals that moving away from full hardware virtualization
 
 In this section, we present a detailed comparative analysis of these configurations, quantifying the execution latencies of PV and PVH guests under stress to determine their overall viability for predictable, latency-sensitive applications compared to their HVM counterparts.
 
-![Comparing HVM, PV and PVH guests - Credit2 Scheduler (Backgroung Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_backgroundnoise.svg)
+![Comparing HVM, PV and PVH guests - Credit2 Scheduler (Background Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_backgroundnoise.svg)
 
 ### LOW LATENCY KERNEL AND LOW LATENCY VM (PV DomU)
 
@@ -802,19 +802,19 @@ The empirical data collected from this sustained test yields the following obser
 
 ### LOW LATENCY KERNEL AND REAL TIME VM (PVH DomU)
 
-This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, specifically evaluating a PVH guest. The configuration utilizes a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). Crucially, this test evaluates the system emulating the static NULL scheduler with explicit vCPU pinning, and it is conducted under a significant background stress workload (`stressdom0`). The objective is to assess the latency and determinism of a highly optimized PVH guest when fully isolated through static hardware allocation, even while the host domain is under duress.
+This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, specifically evaluating a PVH guest. The configuration utilizes a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). This test evaluates the system emulating the static NULL scheduler with explicit vCPU pinning, and it is conducted in a quiet environment without any background stress workload. The objective is to assess the baseline latency and determinism of a highly optimized PVH guest when fully isolated through static hardware allocation.
 
 #### Nominal Performance and Average Latency
-The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead in this optimized, pinned PVH configuration under stress. The average latency recorded during the test was 33 µs. The absolute minimum latency achieved was 3 µs. While the stress workload is active on Dom0, the histogram indicates a tight distribution of nominal execution times, confirming that pinning effectively shields the guest from the majority of the host-level contention.
+The data obtained from the `cyclictest` execution reveals the baseline virtualization overhead in this optimized, pinned PVH configuration. The average latency recorded during the test was 33 µs. The absolute minimum latency achieved was 3 µs. The histogram indicates a tight distribution of nominal execution times, confirming that pinning effectively shields the guest and provides high consistency.
 
 #### Worst-Case Execution Time (WCET) Analysis
-The analysis of the Worst-Case Execution Time (WCET) highlights the system's ability to rigidly bound execution delays, even under stress conditions. Over the duration of the test, the absolute maximum latency recorded was 71 µs.
+The analysis of the Worst-Case Execution Time (WCET) highlights the system's ability to rigidly bound execution delays under ideal, unstressed conditions. Over the duration of the test, the absolute maximum latency recorded was 71 µs.
 
-#### Observations on the Stressed PVH Pinned Environment (NULL Scheduler)
-The empirical data collected from this sustained test yields the following observations regarding the behavior of the RT PVH DomU running on a Low Latency Dom0 with static pinning using the NULL scheduler under `stressdom0`:
+#### Observations on the Baseline PVH Pinned Environment (NULL Scheduler)
+The empirical data collected from this sustained test yields the following observations regarding the behavior of the RT PVH DomU running on a Low Latency Dom0 with static pinning using the NULL scheduler:
 
-*   **Strictly Bounded WCET:** The maximum latency was contained at 71 µs. This demonstrates an exceptionally stable upper bound for a PVH guest, proving that the combination of RT guest kernels, Low Latency host kernels, vCPU pinning, and the NULL scheduler can maintain hard real-time characteristics despite significant host-level stress.
-*   **Reduced Jitter:** The average latency of 33 µs and the tight spread of execution times indicate that the static allocation provided by the NULL scheduler successfully mitigates the scheduling jitter that would otherwise be induced by the `stressdom0` workload.
+*   **Strictly Bounded WCET:** The maximum latency was contained at 71 µs. This demonstrates an exceptionally stable upper bound for a PVH guest, proving that the combination of RT guest kernels, Low Latency host kernels, vCPU pinning, and the NULL scheduler provides hard real-time characteristics.
+*   **Baseline Jitter:** The average latency of 33 µs and the tight spread of execution times indicate a high level of consistency in the static allocation provided by the NULL scheduler.
 
 ## Impact of the Stress Workload on PV and PVH Architectures under Static Allocation
 
@@ -824,7 +824,7 @@ By subjecting both the Paravirtualized (PV) and Hardware Virtual Machine with PV
 
 The subsequent analyses reveal a distinct divergence in architectural resilience under load. While vCPU pinning provides a foundational level of stability for both configurations, the empirical data highlights that the PV architecture remains susceptible to measurable interference from the host. Conversely, the PVH architecture demonstrates exceptional isolation, successfully shielding its critical execution paths and maintaining rigid Worst-Case Execution Time (WCET) boundaries despite the intense resource contention within Dom0.
 
-![Comparing HVM, PV and PVH guests - Null Scheduler (Backgroung Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_null_nonoise.svg)
+![Comparing HVM, PV and PVH guests - Null Scheduler (Background Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_null_backgroundnoise.svg)
 
 ### LOW LATENCY KERNEL AND LOW LATENCY VM (PV DomU)
 
@@ -863,9 +863,9 @@ The empirical data collected from this sustained test yields the following obser
 To synthesize the findings from our latency evaluations, the following table aggregates the Worst-Case Execution Time (WCET) results recorded across the three evaluated Xen virtualization modes: Hardware Virtual Machine (HVM), Hardware Virtual Machine with Paravirtualized drivers (PVH), and fully Paravirtualized (PV) guests. 
 
 
-| Configurazione | HVM | PVH | PV | 
+| Configuration | HVM | PVH | PV | 
 |---|---|---|---|
 | **BASELINE** | 71 | 76 | 525 | 
-| **STRESS WORLOAD** | 209 | 157 | 312 | 
+| **STRESS WORKLOAD** | 209 | 157 | 312 | 
 | **vCPU PINNING BASELINE** | 65 | 71 | 492 |
 | **vCPU PINNING STRESS WORKLOAD** | 163 | 71 | 285 |

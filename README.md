@@ -22,7 +22,6 @@ Students: Rita Marino, Matteo Arnese
   * [3. Unikraft Unikernels as Alternative Guests](#3-unikraft-unikernels-as-alternative-guests)
 * [Required Tools](#required-tools)
 * [Reading Material](#reading-material)
-* [Repository Structure & Deliverables](#repository-structure--deliverables)
 
 ---
 
@@ -45,7 +44,7 @@ The experimental analyses of Abeni and Faggioli (2019, 2020) serve as a methodol
 * **Reproduction:** Replicated key experiments from Abeni & Faggioli ([KVM](KVM/README.md), [Xen](Xen/README.md)) :
   * Executed `cyclictest` in the guest with various host/guest kernel combinations, both with and without a background stress workload (`stress-ng`) in Dom0 / KVM host.
   * Evaluated the effect of the QEMU Device Model priority on Xen HVM (priority-inversion experiment).
-  * Analyzed the effect of the Xen scheduler choice (using `null` vs default `Credit` scheduler).
+  * Analyzed the effect of the Xen scheduler choice (using `null` vs default `Credit2` scheduler).
 * **Extension:** Ran **TACLe Benchmarks** in a "critical" guest alongside `stress-ng` in a co-located "noisy" guest. 
 
 ### 2. Guest-type Comparison

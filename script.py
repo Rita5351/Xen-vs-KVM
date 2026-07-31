@@ -20,10 +20,10 @@ plt.rcParams.update({
 # Dizionario per mappare i file alle relative etichette
 # (assicurati di aver inserito tutti i kernel e le VM testate)
 test_files = {
-    Path('Xen/tests_TACLe/results_test3_baseline.log'): 'BASELINE',
-    Path('Xen/tests_TACLe/results_test3_smallnoise.log'): 'SMALL NOISE',
-    Path('Xen/tests_TACLe/results_test3_bignoise.log'): 'BIG NOISE',
-    Path('Xen/tests_TACLe/results_test3_bignoise_pinned.log'): 'BIG NOISE PINNED'
+    Path('KVM/tests/results_nrt_nrt_stresshost_isolated.log'): 'NRT-NRT',
+    Path('KVM/tests/results_nrt_rt_stresshost_isolated.log'): 'NRT-RT',
+    Path('KVM/tests/results_rt_nrt_stresshost_isolated.log'): 'RT-NRT',
+    Path('KVM/tests/results_rt_rt_stresshost_isolated.log'): 'RT-RT'
    
 }
  
@@ -85,7 +85,7 @@ def main():
     # la distribuzione mantenendo visibili i picchi anomali
     ax.set_yscale('log')
  
-    plt.title('test3 execution time on Xen ', pad=20, fontweight='bold')
+    plt.title('cyclic test isolated stress host on KVM ', pad=20, fontweight='bold')
     plt.xlabel('System Configuration', labelpad=12)
     plt.ylabel(r'Latency ($\mu s$) [Log Scale]', labelpad=12)
  
@@ -93,7 +93,7 @@ def main():
     plt.tight_layout()
  
     # Salvataggio
-    output_filename = 'Xen_TACLe_test3_boxplot.svg'
+    output_filename = 'KVM_ISOLATED_STRESS_HOST_boxplot.svg'
     plt.savefig(output_filename, format='svg', bbox_inches='tight')
     plt.close()
     print(f"\n[OK] Boxplot salvato con successo: {output_filename}")

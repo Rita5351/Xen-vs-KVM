@@ -35,6 +35,8 @@ To establish a baseline for our performance comparison, we also required the sta
   ```
 
 ### Patching Linux with PREEMPT_RT
+To achieve true real-timeliness after installation, we must move beyond the default `PREEMPT_DYNAMIC` schema. While `PREEMPT_DYNAMIC` allows the kernel to dynamically determine preemption modes (e.g., *none*, *voluntary*, or *full*), it is not designed for real-time workloads and lacks hard guarantees for interrupt latency and thread scheduling.
+
 For the Real-Time kernel, we needed to follow some additional steps:
 
 * We downloaded the matching PREEMPT_RT patch from the [Linux Foundation Real-Time Wiki](https://wiki.linuxfoundation.org/realtime/start) and extracted it:
@@ -93,9 +95,6 @@ Below are the specific configuration steps applied to our testbed, which feature
 
 * **Set a Fixed CPU Frequency:** In the main `Overclocking` menu, change the **CPU Ratio** from `Auto` to a fixed value of **44.00**. This forces the processor to run at a constant clock speed, preventing the latency overhead associated with dynamic frequency transitions during the experiments.
 
-### Achieving True Real-Timeliness
-
-To achieve true real-timeliness after installation, we must move beyond the default `PREEMPT_DYNAMIC` schema. While `PREEMPT_DYNAMIC` allows the kernel to dynamically determine preemption modes (e.g., *none*, *voluntary*, or *full*), it is not designed for real-time workloads and lacks hard guarantees for interrupt latency and thread scheduling.
 
 ### OS-level isolation
 
@@ -280,7 +279,7 @@ We also ensured that all the necessary configuration flags required to run the k
 * `iommu=pt`
 * `console=hvc0`
 * `console=tty0`
-* `earlyprintk=ken`
+* `earlyprintk=xen`
 * `apci=off noapic pci=nomsi`
 * `noirqbalance`
 * `nomodeset`
@@ -293,7 +292,7 @@ Consequently, we decided to leave the "Fully Preemptible Kernel" option disabled
 
 ### Resource partitioning and NULL-scheduler
 
-In order to compare the effects of the scheduler choice on Xen, we swapped the default Credit2 scheduler with a pinned configuration, effectively using an offline scheduler (the NULL-scheduler). This is done to assess the current effects of the issues identitied by the previous analyses of Abeni and Faggioli, such as the priority invertion via QEMU and the `TIMER_SLOP` limitation. In order to do so, we changed the Xen boot configuration to use only the first 22 pCPUs for Dom0:
+In order to compare the effects of the scheduler choice on Xen, we swapped the default Credit2 scheduler with a pinned configuration, effectively using an offline scheduler (the NULL-scheduler). This is done to assess the current effects of the issues identified by the previous analyses of Abeni and Faggioli, such as the priority inversion via QEMU and the `TIMER_SLOP` limitation. In order to do so, we changed the Xen boot configuration to use only the first 22 pCPUs for Dom0:
 
 ```text
 menuentry 'Ubuntu GNU/Linux, with Xen 4.17-amd64 and Linux 6.18.35, null-sched and CPU pinning on 0-21' --class ubuntu --class gnu-linux --class gnu --class os --class xen {
