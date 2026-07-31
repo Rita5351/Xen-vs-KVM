@@ -108,6 +108,8 @@ The empirical observation of this sustained test provides insights into the beha
 * **Hypervisor-Induced Jitter:** The average latency of 32 µs confirms that the Credit2 scheduler introduces inherent, unavoidable jitter.
 * **Effective Internal Determinism:** The guest-level optimizations seemed sufficient to maintain relatively tight temporal constraints, avoiding large latency spikes despite the general-purpose hypervisor layer.
 
+![Baseline Performance - Credit2 Scheduler (No Noise)](tests/plots/svg/Xen_baseline_performance_c2_boxplot.svg)
+
 ## Impact of the Stress Workload on Latencies
 
 To evaluate system robustness and trigger potentially higher latencies, the testing methodology involves introducing an additional load, defined as a "stress workload". In the case of the Xen hypervisor, this stress workload is executed in the background within the privileged Dom0, utilizing the general-purpose `SCHED_OTHER` scheduling policy alongside the default Credit2 scheduler. 
@@ -211,6 +213,8 @@ The empirical observation of this sustained test provides insights into the beha
 
 * **Effective Internal Determinism:** The guest-level optimizations seemed sufficient to maintain temporal constraints within a 209 µs window, managing large latency spikes despite the general-purpose hypervisor layer.
  
+![Performance under Stress Workload - Credit2 Scheduler](tests/plots/svg/Xen_under_Stress_Workload_performance_c2_boxplot.svg)
+
 ## BASELINE PERFORMANCE ANALYSIS WITH STATIC vCPU PINNING
 
 This section advances the performance investigation by introducing a static configuration utilizing virtual CPU (vCPU) pinning. During previous evaluations, the introduction of a background stress workload in Dom0 resulted in a significant degradation of Xen execution latencies. This prompted a targeted investigation to determine whether these high latencies were a fundamental issue caused by the hypervisor scheduler or if they stemmed from the Device Model being preempted by the stress workload. 
@@ -297,6 +301,8 @@ The empirical observation of this sustained test provides insights into the beha
 * **Hypervisor-Induced Jitter:** The consistent average latency of 33 µs confirms that the underlying virtualization architecture introduces inherent, unavoidable jitter.
 * **Effective Internal Determinism:** The guest-level optimizations are sufficient to maintain extremely tight temporal constraints. The maximum latency performance remains robust and stable, mirroring the results achieved with a standard Dom0 (65 µs versus 67 µs).
 
+![Baseline Performance - Static vCPU Pinning/Null Scheduler (No Noise)](tests/plots/svg/Xen_baseline_performance_null_boxplot.svg)
+
 ## Impact of the Stress Workload on Latencies with vCPU PINNING
 
 To evaluate system determinism and upper latency bounds under severe conditions, the testing methodology involves executing a continuous 5-minute `cyclictest` probe while introducing a background stress workload within the privileged control domain, Dom0. Across all experiments, the Xen hypervisor is configured with static vCPU pinning—acting as a Null scheduler—to restrict vCPU migration and provide dedicated physical cores to the unprivileged domain, DomU.
@@ -375,6 +381,7 @@ The empirical observation of this sustained test provides insights into the beha
 * **Hypervisor-Induced Jitter:** The consistent average latency of 32 µs confirms that the underlying virtualization architecture introduces inherent, unavoidable jitter, irrespective of kernel patches.
 * **Effective Internal Determinism:** The DomU-level optimizations, combined with the Low Latency Dom0, successfully contain the worst-case latency well below the levels observed in non-RT configurations, demonstrating the value of guest-level real-time optimizations even under host-level stress.
 
+![Performance under Stress - Static Pinning (Default QEMU Priority)](tests/plots/svg/Xen_under_Stress_performance_null_boxplot.svg)
 
 ## Analysis of Device Model priority inversion in modern Xen
 
@@ -392,8 +399,9 @@ To reproduce and analyze the aforementioned priority inversion on a modern Xen v
 * **Kernel Configurations**: Tests were run across the usual four permutations of Dom0 and DomU kernels.
 * **QEMU Priority Mitigation**: For each kernel combination, a baseline test (default QEMU priority) was compared against a mitigated test (`maxprioqemu`), wherein the QEMU Device Model process in Dom0 was explicitly set to the `SCHED_FIFO` policy with a priority of 99.
 
-![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise_maxprioqemu.svg)
+![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise_maxprioqemu.svg)
 
+![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/Xen_under_Stress_MaxPrioQuemu_performance_null_boxplot.svg)
 
 ### Empirical Results
 
@@ -407,7 +415,9 @@ Based on the experimental data, the priority inversion problem previously docume
 
 With further experiments, we confirmed that changing the priority of the QEMU process does not improve latency even when using the Credit2 scheduler.
 
-![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/xen_backgroundnoise_maxprioqemu.svg)
+![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/xen_backgroundnoise_maxprioqemu.svg)
+
+![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/Xen_under_Stress_MaxPrioQuemu_performance_credit2_boxplot.svg)
 
 This behavior indicates that modern Xen HVM implementations successfully decouple essential local timer and interrupt deliveries from the QEMU Device Model. Because CPU-bound real-time workloads (like cyclictest) primarily exercise timer wakeups rather than complex I/O, the DomU can accurately maintain its temporal constraints utilizing hardware virtualization extensions alone. Therefore, manually elevating the priority of the Dom0 QEMU process is unnecessary for maintaining real-time determinism in contemporary Xen environments.
 
@@ -420,6 +430,104 @@ Following the detailed analysis of each individual scenario, the table below pro
 | **STRESS WORKLOAD** | 239 | 177 | 526 | 209 |
 | **vCPU PINNING BASELINE** | 137 | 67 | 179 | 65 |
 | **vCPU PINNING STRESS WORKLOAD** | 443 | 76 | 410 | 163 |
+
+Furthermore, alongside the consolidated WCET table, this section presents a detailed breakdown of the percentage increments for both the maximum latency (WCET) and the average latency (expressed as Mean $\pm$ Standard Deviation). To comprehensively evaluate the effectiveness of the hardware isolation mechanisms, this quantitative analysis of the performance degradation is divided into two distinct sets: the first evaluates the impact of the Dom0 stress workload under standard dynamic scheduling, while the second analyzes the impact of the same stress workload when strict static vCPU pinning is applied to isolate the domains.
+
+### NRT NRT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 32.87 ± 15.17 µs | 35.52 ± 15.50 µs |
+| **WCET (Max)** | 369 µs | 239 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +8.06%
+* WCET Increment: -35.23%
+
+
+### NRT RT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 33.20 ± 15.12 µs | 35.86 ± 15.54 µs |
+| **WCET (Max)** | 74 µs | 177 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +8.01%
+* WCET Increment: +139.19%
+
+
+### LL NRT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 32.71 ± 15.17 µs | 35.58 ± 15.55 µs |
+| **WCET (Max)** | 152 µs | 526 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +8.79%
+* WCET Increment: +246.05%
+
+
+### LL RT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 32.89 ± 15.14 µs | 35.66 ± 15.60 µs |
+| **WCET (Max)** | 71 µs | 209 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +8.42%
+* WCET Increment: +194.37%
+
+---
+
+### NRT NRT
+
+| METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 32.65 ± 15.17 µs | 32.76 ± 15.10 µs |
+| **WCET (Max)** | 137 µs | 443 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +0.34%
+* WCET Increment: +223.36%
+
+
+### NRT RT
+
+| METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 32.59 ± 15.16 µs | 33.23 ± 15.09 µs |
+| **WCET (Max)** | 67 µs | 76 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +1.96%
+* WCET Increment: +13.43%
+
+### LL NRT
+
+| METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 32.49 ± 15.19 µs | 32.83 ± 15.06 µs |
+| **WCET (Max)** | 179 µs | 410 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +1.05%
+* WCET Increment: +129.05%
+
+
+### LL RT
+
+| METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 33.09 ± 15.18 µs | 32.73 ± 15.09 µs |
+| **WCET (Max)** | 65 µs | 163 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: -1.11%
+* WCET Increment: +150.77%
+
 
 ## TACLe Benchmark
 
@@ -680,6 +788,78 @@ To quickly evaluate system stability, the following table exclusively reports th
 | **lift** | 85 | 36 | 142 | 43 |
 | **matrix1** | 9 | 8 | 45 | 11 |
 | **test3** | 8,414 | 8,885 | 14,786 | 10,037 |
+
+Furthermore, alongside the WCET summary, this section now includes a detailed breakdown of the percentage increments for both the average latency (expressed as Mean $\pm$ Standard Deviation) and the maximum latency (WCET). This addition provides a precise quantitative analysis of the performance degradation induced by the heavy background noise within the control domain (Dom0) compared to the baseline execution for each individual benchmark.
+
+### DEBIE
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| --- | --- | --- |
+| **Mean ± SD** | 27175.71 ± 1309.25 µs | 28196.64 ± 3277.83 µs |
+| **WCET (Max)** | 31048 µs | 57314 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+
+* Average Increment: +3.76%
+* WCET Increment: +84.60%
+
+![TACLe benchmark - debie execution time on Xen](tests_TACLe/plots/Xen_TACLe_debie_boxplot.svg)
+
+### HUFFENC
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| --- | --- | --- |
+| **Mean ± SD** | 16.18 ± 1.22 µs | 19.05 ± 5.71 µs |
+| **WCET (Max)** | 35 µs | 182 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+
+* Average Increment: +17.71%
+* WCET Increment: +420.00%
+
+![TACLe benchmark - huff_enc execution time on Xen](tests_TACLe/plots_nanosec/svg/xen_TACLe_huffenc_boxplot.svg)
+
+### LIFT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| --- | --- | --- |
+| **Mean ± SD** | 19.23 ± 1.32 µs | 20.43 ± 4.91 µs |
+| **WCET (Max)** | 85 µs | 142 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+
+* Average Increment: +6.26%
+* WCET Increment: +67.06%
+
+![TACLe benchmark - lift execution time on Xen](tests_TACLe/plots_nanosec/svg/xen_TACLe_lift_boxplot.svg)
+
+### MATRIX1
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| --- | --- | --- |
+| **Mean ± SD** | 0.00 ± 0.17 µs | 0.01 ± 0.30 µs |
+| **WCET (Max)** | 9 µs | 45 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+
+* Average Increment: +221.55%
+* WCET Increment: +400.00%
+
+![TACLe benchmark - matrix1 execution time on Xen](tests_TACLe/plots_nanosec/svg/xen_TACLe_matrix1_boxplot.svg)
+
+### TEST3
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| --- | --- | --- |
+| **Mean ± SD** | 8328.16 ± 38.48 µs | 9182.95 ± 1317.37 µs |
+| **WCET (Max)** | 8414 µs | 14786 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+
+* Average Increment: +10.26%
+* WCET Increment: +75.73%
+
+![TACLe benchmark - test3 execution time on Xen](tests_TACLe/plots/Xen_TACLe_test3_boxplot.svg)
 
 ## PV and PVH DomUs
 

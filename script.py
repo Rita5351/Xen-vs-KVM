@@ -20,10 +20,10 @@ plt.rcParams.update({
 # Dizionario per mappare i file alle relative etichette
 # (assicurati di aver inserito tutti i kernel e le VM testate)
 test_files = {
-    Path('KVM/tests/results_nrt_nrt_stresshost_isolated.log'): 'NRT-NRT',
-    Path('KVM/tests/results_nrt_rt_stresshost_isolated.log'): 'NRT-RT',
-    Path('KVM/tests/results_rt_nrt_stresshost_isolated.log'): 'RT-NRT',
-    Path('KVM/tests/results_rt_rt_stresshost_isolated.log'): 'RT-RT'
+    Path('Xen/tests/results_credit2_hvm_nopin_nrt_nrt_stressdom0_maxprioqemu.log'): 'NRT-NRT',
+    Path('Xen/tests/results_credit2_hvm_nopin_nrt_rt_stressdom0_maxprioqemu.log'): 'NRT-RT',
+    Path('Xen/tests/results_credit2_hvm_nopin_ll_nrt_stressdom0_maxprioqemu.log'): 'LL-NRT',
+    Path('Xen/tests/results_credit2_hvm_nopin_ll_rt_stressdom0_maxprioqemu.log'): 'LL-RT'
    
 }
  
@@ -85,7 +85,7 @@ def main():
     # la distribuzione mantenendo visibili i picchi anomali
     ax.set_yscale('log')
  
-    plt.title('cyclic test isolated stress host on KVM ', pad=20, fontweight='bold')
+    plt.title('cyclic test latencies under Stress with Static vCPU Pinning on Xen (MaxPrioQuemu) ', pad=20, fontweight='bold')
     plt.xlabel('System Configuration', labelpad=12)
     plt.ylabel(r'Latency ($\mu s$) [Log Scale]', labelpad=12)
  
@@ -93,7 +93,7 @@ def main():
     plt.tight_layout()
  
     # Salvataggio
-    output_filename = 'KVM_ISOLATED_STRESS_HOST_boxplot.svg'
+    output_filename = 'Xen_under_Stress_MaxPrioQuemu_performance_credit2_boxplot.svg'
     plt.savefig(output_filename, format='svg', bbox_inches='tight')
     plt.close()
     print(f"\n[OK] Boxplot salvato con successo: {output_filename}")

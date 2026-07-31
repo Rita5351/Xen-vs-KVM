@@ -325,7 +325,6 @@ The empirical observation of this execution provides critical insight into the l
 
 Following the detailed analysis of each individual scenario, the table below provides a consolidated overview of the Worst-Case Execution Time (WCET) measurements. It allows for a direct comparison across all four kernel configurations (**NRT-NRT**, **NRT-RT**, **RT-NRT**, and **RT-RT**) under the three tested conditions: standard execution (**BASELINE**), heavy system load in the control domain (**STRESS DOM0**), and load with isolation mechanisms applied (**STRESS DOM0 ISOLATED**).
 
-Furthermore, alongside the WCET table, this section presents a detailed breakdown of the percentage increments for both the maximum latency (WCET) and the average latency (expressed as Mean $\pm$ Standard Deviation). This provides a precise quantitative analysis of the performance degradation induced by the stress workload compared to the baseline for each specific scenario.
 
 | Configuration | NRT-NRT | NRT-RT | RT-NRT | RT-RT |
 |---|---|---|---|---|
@@ -333,6 +332,7 @@ Furthermore, alongside the WCET table, this section presents a detailed breakdow
 | **STRESSHOST** | 44409 | 51069 | 50257 | 9829 |
 | **STRESSHOST ISOLATED** | 2024 | 2299 | 1502 | 1935 |
 
+Furthermore, alongside the WCET table, this section presents a detailed breakdown of the percentage increments for both the maximum latency (WCET) and the average latency (expressed as Mean $\pm$ Standard Deviation). This provides a precise quantitative analysis of the performance degradation induced by the stress workload compared to the baseline for each specific scenario.
 
 ### NRT NRT
 
@@ -345,7 +345,6 @@ Furthermore, alongside the WCET table, this section presents a detailed breakdow
 * Average Increment: +91.50%
 * WCET Increment: +7276.91%
 
----
 
 ### NRT RT
 
@@ -357,7 +356,7 @@ Furthermore, alongside the WCET table, this section presents a detailed breakdow
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: +60.10%
 * WCET Increment: +735.28%
----
+
 
 ### RT NRT
 
@@ -369,7 +368,7 @@ Furthermore, alongside the WCET table, this section presents a detailed breakdow
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: +84.76%
 * WCET Increment: +53939.78%
----
+
 
 ### RT RT
 
@@ -624,8 +623,6 @@ The KVM "Big Noise Pinned" baseline demonstrates the critical importance of CPU 
 ### Max Latency Summary (μs)
 To quickly evaluate system stability, the following table exclusively reports the peak values (**Max Latency**). This format allows for an at-a-glance comparison of the Worst-Case Execution Time across the four operational scenarios, directly highlighting the impact of noise and the effectiveness of CPU pinning in containing interference.
 
-Furthermore, alongside the WCET summary, this section now includes a detailed breakdown of the percentage increments for both the average latency (expressed as Mean $\pm$ Standard Deviation) and the maximum latency (WCET). This addition provides a precise quantitative analysis of the performance degradation induced by the heavy background noise compared to the baseline execution for each individual benchmark.
-
 | Benchmark | Baseline | Small Noise | Big Noise | Big Noise Pinned |
 | --- | --- | --- | --- | --- |
 | **DEBIE** | 32,409 | 30,872 | 43,849 | 37,284 |
@@ -633,6 +630,8 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 | **lift** | 61 | 58 | 280 | 67 |
 | **matrix1** | 1 | 0 | 6 | 1 |
 | **test3** | 9,471 | 8,612 | 9,458 | 10,996 |
+
+Furthermore, alongside the WCET summary, this section now includes a detailed breakdown of the percentage increments for both the average latency (expressed as Mean $\pm$ Standard Deviation) and the maximum latency (WCET). This addition provides a precise quantitative analysis of the performance degradation induced by the heavy background noise compared to the baseline execution for each individual benchmark.
 
 ### DEBIE
 
@@ -645,7 +644,8 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 * Average Increment: +5.99%
 * WCET Increment: +35.30%
 
----
+![TACLe benchmark - debie execution time on KVM](tests_TACLe/plots/kvm_TACLe_debie_boxplot.svg)
+
 
 ### HUFFENC
 
@@ -658,7 +658,8 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 * Average Increment: +63.63%
 * WCET Increment: +7.81%
 
----
+![TACLe benchmark - huff_enc execution time on KVM](tests_TACLe/plots_nanosec/svg/kvm_TACLe_huffenc_boxplot.svg)
+
 
 ### LIFT
 
@@ -671,7 +672,7 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 * Average Increment: -0.07%
 * WCET Increment: +359.02%
 
----
+![TACLe benchmark - lift execution time on KVM](tests_TACLe/plots_nanosec/svg/kvm_TACLe_lift_boxplot.svg)
 
 ### MATRIX1
 
@@ -684,7 +685,7 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 * Average Increment: +600.00%
 * WCET Increment: +500.00%
 
----
+![TACLe benchmark - matrix1 execution time on KVM](tests_TACLe/plots_nanosec/svg/kvm_TACLe_matrix1_boxplot.svg)
 
 ### TEST3
 
@@ -696,3 +697,5 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: +1.12%
 * WCET Increment: -0.14%
+
+![TACLe benchmark - test3 execution time on KVM](tests_TACLe/plots/kvm_TACLe_test3_boxplot.svg)
