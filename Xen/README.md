@@ -907,6 +907,8 @@ The empirical data collected from this test yields the following observations re
 *   **Bounded WCET:** The maximum latency was contained at 76 µs, indicating that the combination of the RT guest kernel and the Low Latency host kernel provides a stable upper bound when the host is not under load.
 *   **Baseline Jitter:** The average latency of 32 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This variability highlights the inherent impact of the dynamic Credit2 hypervisor scheduler, even without resource contention from a `stressdom0` workload.
 
+![Comparing HVM, PV and PVH guests - Credit2 Scheduler (No Noise)](tests/plots/svg/Comparing_HVM_PV_PVH_credit2_boxplot.svg)
+
 ## Impact of the Stress Workload on Different Virtualization Technologies
 
 To assess the influence of the underlying virtualization architecture on system determinism, this phase of testing introduces a background stress workload in the privileged domain (Dom0) while executing the `cyclictest` probe within PV and PVH guests. Building upon our earlier findings—which demonstrated that modern Hardware Virtual Machine (HVM) configurations successfully manage latency bounds without suffering from historical QEMU-induced preemption anomalies—this evaluation aims to compare how alternative virtualization models respond to resource contention. Ultimately, the analysis highlights that while PVH and HVM achieve highly similar performance levels, the PV architecture exhibits the worst performance among all three technologies.
@@ -953,6 +955,8 @@ The empirical data collected from this sustained test yields the following obser
 *   **Bounded WCET:** The maximum latency was contained at 157 µs, indicating that the combination of the RT guest kernel and the Low Latency host kernel provided a degree of stability, preventing the extreme, multi-millisecond spikes that can occur in less optimized configurations.
 *   **Hypervisor-Induced Jitter:** The average latency of 35 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This variability highlights the impact of dynamic hypervisor scheduling and resource contention from the `stressdom0` workload when vCPUs are not statically pinned to dedicated physical cores.
 
+![Comparing HVM, PV and PVH guests - Credit2 Scheduler (Background Noise)](tests/plots/svg/Comparing_HVM_PV_PVH_stressdom0_credit2_boxplot.svg)
+
 ## Comparative Analysis of PV and PVH Architectures under Static Allocation
 
 Following the initial investigations into dynamic scheduling behavior, this section presents a targeted comparative analysis of execution latencies between Paravirtualized (PV) and Hardware Virtual Machine with PV drivers (PVH) configurations. To eliminate the jitter introduced by complex fair-share algorithms and evaluate the highest degree of determinism achievable, these tests employ strict vCPU-to-pCPU pinning across both the privileged domain (Dom0) and the unprivileged user domain (DomU), effectively emulating the deterministic behavior of an offline NULL scheduler.
@@ -996,6 +1000,8 @@ The empirical data collected from this sustained test yields the following obser
 *   **Strictly Bounded WCET:** The maximum latency was contained at 71 µs. This demonstrates an exceptionally stable upper bound for a PVH guest, proving that the combination of RT guest kernels, Low Latency host kernels, vCPU pinning, and the NULL scheduler provides hard real-time characteristics.
 *   **Baseline Jitter:** The average latency of 33 µs and the tight spread of execution times indicate a high level of consistency in the static allocation provided by the NULL scheduler.
 
+![Comparing HVM, PV and PVH guests - Null Scheduler (No Noise)](tests/plots/svg/Comparing_HVM_PV_PVH_null_boxplot.svg)
+
 ## Impact of the Stress Workload on PV and PVH Architectures under Static Allocation
 
 Building upon the baseline established in the ideal, unstressed environment, this phase introduces a severe background stress workload (`stressdom0`) into the privileged control domain. The primary objective is to evaluate the resilience of static vCPU pinning—acting as a surrogate for the offline NULL scheduler—when the host system is heavily saturated with competing processes.
@@ -1038,6 +1044,8 @@ The empirical data collected from this sustained test yields the following obser
 *   **Strictly Bounded WCET:** The maximum latency was contained at 71 µs. This demonstrates that the combination of the `PREEMPT_RT` guest kernel, the Low-Latency host kernel, static vCPU pinning, and the NULL scheduler provides exceptional stability and successfully shields the critical guest execution path from severe preemption spikes.
 *   **Resilience to Host Stress:** The average latency of 33 µs and the rigid WCET boundary confirm that this highly optimized, static PVH configuration effectively mitigates the severe scheduling jitter typically induced by host-level resource contention.
 
+![Comparing HVM, PV and PVH guests - Null Scheduler (Background Noise)](tests/plots/svg/Comparing_HVM_PV_PVH_stressdom0_null_boxplot.svg)
+
 ---
 
 To synthesize the findings from our latency evaluations, the following table aggregates the Worst-Case Execution Time (WCET) results recorded across the three evaluated Xen virtualization modes: Hardware Virtual Machine (HVM), Hardware Virtual Machine with Paravirtualized drivers (PVH), and fully Paravirtualized (PV) guests. 
@@ -1049,3 +1057,82 @@ To synthesize the findings from our latency evaluations, the following table agg
 | **STRESS WORKLOAD** | 209 | 157 | 312 | 
 | **vCPU PINNING BASELINE** | 65 | 71 | 492 |
 | **vCPU PINNING STRESS WORKLOAD** | 163 | 71 | 285 |
+
+This section provides a quantitative breakdown of the percentage increments for both the average latency (Mean ± Standard Deviation) and the maximum latency (WCET) across Xen's three virtualization modes: HVM, PV, and PVH. The analysis evaluates the performance degradation caused by a heavy stress workload introduced in the control domain (Dom0).
+
+The following tables illustrate the system's behavior under the default dynamic scheduler. These results highlight the performance impact of the Dom0 stress workload when no hardware isolation mechanisms are applied.
+### HVM LL RT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 32.89 ± 15.14 µs | 35.66 ± 15.60 µs |
+| **WCET (Max)** | 71 µs | 209 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +8.42%
+* WCET Increment: +194.37%
+
+
+### PV LL-LL
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 37.17 ± 14.69 µs | 40.20 ± 16.22 µs |
+| **WCET (Max)** | 525 µs | 312 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +8.16%
+* WCET Increment: -40.57%
+
+
+### PVH LL-RT
+
+| METRIC | BASELINE | STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 32.40 ± 15.36 µs | 35.58 ± 15.50 µs |
+| **WCET (Max)** | 76 µs | 157 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +9.82%
+* WCET Increment: +106.58%
+
+---
+The tables below evaluate the resilience of the same configurations when strict vCPU pinning is enforced. By isolating Dom0 and DomU on dedicated physical cores, this scenario demonstrates how static hardware allocation mitigates scheduling interference under stress.
+
+### HVM LL RT
+
+| METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 33.09 ± 15.18 µs | 32.73 ± 15.09 µs |
+| **WCET (Max)** | 65 µs | 163 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: -1.11%
+* WCET Increment: +150.77%
+
+
+### PV LL-LL (Static vCPU Pinning)
+
+| METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 40.00 ± 14.71 µs | 39.15 ± 15.23 µs |
+| **WCET (Max)** | 492 µs | 285 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: -2.13%
+* WCET Increment: -42.07%
+
+
+### PVH LL-RT (Static vCPU Pinning)
+
+| METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
+| :--- | :--- | :--- |
+| **Mean ± SD** | 33.16 ± 15.12 µs | 33.20 ± 15.09 µs |
+| **WCET (Max)** | 71 µs | 71 µs |
+
+**PERCENTAGE INCREMENTS (Stress vs. Baseline):**
+* Average Increment: +0.14%
+* WCET Increment: 0.00%
+
+
+
