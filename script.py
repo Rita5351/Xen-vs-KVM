@@ -20,9 +20,10 @@ plt.rcParams.update({
 # Dizionario per mappare i file alle relative etichette
 # (assicurati di aver inserito tutti i kernel e le VM testate)
 test_files = {
-    Path('Xen/tests/results_null_hvm_pinned_ll_rt_stressdom0.log'): 'LL-RT',
-    Path('Xen/tests_pv_pvh/results_null_pv_pinned_ll_ll_stressdom0.log'): 'LL-LL',
-    Path('Xen/tests_pv_pvh/results_null_pvh_pinned_ll_rt_stressdom0.log'): 'LL - RT'
+    Path('Xen/tests_various_stessors/NRT-pinned__guest-rt5-pinned-hvm__stressor-baseline.log'): 'BASELINE',
+    Path('Xen/tests_various_stessors/NRT-pinned__guest-rt5-pinned-hvm__stressor-cache.log'): 'CACHE',
+    Path('Xen/tests_various_stessors/NRT-pinned__guest-rt5-pinned-hvm__stressor-interrupts.log'): 'INTERRUPTS',
+    Path('Xen/tests_various_stessors/NRT-pinned__guest-rt5-pinned-hvm__stressor-rawsock.log'): 'RAWSOCK'
 }
  
 def load_histogram_data(filepath, config_name):
@@ -83,7 +84,7 @@ def main():
     # la distribuzione mantenendo visibili i picchi anomali
     ax.set_yscale('log')
  
-    plt.title('cyclic test latencies comparing HVM, PV and PVH guests - Null Scheduler (Background Noise)', pad=20, fontweight='bold')
+    plt.title('stressor NRT pinned guest rt5 pinned HVM', pad=20, fontweight='bold')
     plt.xlabel('System Configuration', labelpad=12)
     plt.ylabel(r'Latency ($\mu s$) [Log Scale]', labelpad=12)
  
@@ -91,7 +92,7 @@ def main():
     plt.tight_layout()
  
     # Salvataggio
-    output_filename = 'Comparing_HVM_PV_PVH_stressdom0_null_boxplot.svg'
+    output_filename = 'stressor_NRT_pinned_guest_rt5_pinned_HVM_boxplot.svg'
     plt.savefig(output_filename, format='svg', bbox_inches='tight')
     plt.close()
     print(f"\n[OK] Boxplot salvato con successo: {output_filename}")

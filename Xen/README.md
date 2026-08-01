@@ -528,6 +528,142 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 * Average Increment: -1.11%
 * WCET Increment: +150.77%
 
+---
+
+Following the previous tests, it was decided to conduct a new case study: the latter aims to measure and compare the real-time latency perceived by an application workload running inside HVM virtual machines (DomU) on a Xen hypervisor, as four experimental factors vary:
+
+* **Dom0 Kernel**: standard ("NRT") vs. low-latency/PREEMPT_RT kernel ("LL");
+* **vCPU Pinning**: guests with vCPUs pinned to dedicated physical cores vs. unpinned guests (free scheduling by Xen);
+* **Guest Type**: guest with standard Linux kernel ("nrt") vs. guest with RT kernel ("rt5");
+* **Concurrent stress workload on Dom0**: no additional stressor besides CPU+memory ("baseline"), cache stress ("cache"), interrupts stress ("interrupts"), raw sockets stress ("rawsock").
+
+The combination of these four factors generates 32 test scenarios.
+
+The tests were executed via a bash orchestration script that, for each Dom0 kernel, sequentially boots (via grub-reboot) and subsequently instantiates the relevant guests. For each guest × stressor combination, the script:
+
+* starts the "always-on" stressors on Dom0 (`stress-ng --cpu 22`, `stress-ng --vm 12 --vm-bytes 2G`), kept active for the entire duration of the guest's test block;
+* starts the specific sequential stressor of the scenario (none for baseline; `--cache 0`; `--interrupts`; `--rawsock 22`);
+* creates the DomU (`xl create`), waits 30 s for settling;
+* runs `cyclictest` inside the DomU (priority 99, interval 50 µs, duration 5 minutes, histogram with a 1000 µs threshold) routing the output exclusively to a file to avoid introducing artifacts due to traffic on the serial console;
+* destroys the DomU, mounts its disk on Dom0 to retrieve the histogram file, terminates all stressors, and clears the Dom0 caches before the next scenario.
+
+Each kernel × guest × stressor combination was executed in a single run (no repetitions).
+
+#### Metrics extracted from each log
+
+* **Avg**: average scheduling latency (µs) over the entire run;
+* **Max**: maximum observed latency (µs);
+* **Overflow**: number of samples exceeding the histogram threshold (1000 µs) --- a direct indicator of severe latency events, not captured in the main distribution;
+* **Overflow cycles**: the cycle indices in which the overflows occurred, useful to understand whether the events are concentrated in a phase of the test (e.g., startup or shutdown) or evenly distributed.
+
+---
+
+### Results
+
+The following table reports the extracted metrics for each of the 32 combinations.
+
+| **Kernel** | **Pinning** | **Guest**   | **Stressor** | **Avg (µs)** | **Max (µs)** | **Overflow** | **Note** |
+|------------|-------------|-------------|--------------|--------------|--------------|--------------|----------|
+| LL         | No          | nrt-hvm     | baseline     | 36           | 57.384       | 17           |          |
+| LL         | No          | nrt-hvm     | cache        | 36           | 2774         | 1            |          |
+| LL         | No          | nrt-hvm     | interrupts   | 36           | 59.998       | 18           |          |
+| LL         | No          | nrt-hvm     | rawsock      | 35           | 52.363       | 13           |          |
+| LL         | No          | rt5-hvm     | baseline     | 36           | 192          | 0            |          |
+| LL         | No          | rt5-hvm     | cache        | 36           | 2772         | 19           | Isolated anomaly |
+| LL         | No          | rt5-hvm     | interrupts   | 35           | 144          | 0            |          |
+| LL         | No          | rt5-hvm     | rawsock      | 35           | 162          | 0            |          |
+| LL         | Yes         | nrt-pinned  | baseline     | 32           | 470          | 0            |          |
+| LL         | Yes         | nrt-pinned  | cache        | 34           | 35.984       | 1            | Single Overflow, start run |
+| LL         | Yes         | nrt-pinned  | interrupts   | 32           | 423          | 0            |          |
+| LL         | Yes         | nrt-pinned  | rawsock      | 32           | 536          | 0            |          |
+| LL         | Yes         | rt5-pinned  | baseline     | 34           | 79           | 0            |          |
+| LL         | Yes         | rt5-pinned  | cache        | 33           | 146          | 0            |          |
+| LL         | Yes         | rt5-pinned  | interrupts   | 32           | 81           | 0            |          |
+| LL         | Yes         | rt5-pinned  | rawsock      | 32           | 77           | 0            |          |
+| NRT        | No          | nrt-hvm     | baseline     | 35           | 392          | 0            |          |
+| NRT        | No          | nrt-hvm     | cache        | 36           | **61.611**   | **88**       | **Worst case** |
+| NRT        | No          | nrt-hvm     | interrupts   | 35           | 61.826       | 12           |          |
+| NRT        | No          | nrt-hvm     | rawsock      | 35           | 58.344       | 11           |          |
+| NRT        | No          | rt5-hvm     | baseline     | 35           | 175          | 0            |          |
+| NRT        | No          | rt5-hvm     | cache        | 36           | 244          | 0            |          |
+| NRT        | No          | rt5-hvm     | interrupts   | 35           | 189          | 0            |          |
+| NRT        | No          | rt5-hvm     | rawsock      | 35           | 143          | 0            |          |
+| NRT        | Yes         | nrt-pinned  | baseline     | 32           | 450          | 0            |          |
+| NRT        | Ys          | nrt-pinned  | cache        | 33           | 414          | 0            |          |
+| NRT        | Yes         | nrt-pinned  | interrupts   | 32           | **4225**     | **47**       | Cluster overflow at end of run |
+| NRT        | Yes         | nrt-pinned  | rawsock      | 32           | 236          | 0            |          |
+| NRT        | Yes         | rt5-pinned  | baseline     | 32           | 72           | 0            |          |
+| NRT        | Yes         | rt5-pinned  | cache        | 34           | 99           | 0            |          |
+| NRT        | Yes         | rt5-pinned  | interrupts   | 33           | 80           | 0            |          |
+| NRT        | Yes         | rt5-pinned  | rawsock      | 33           | 357          | 0            |          |
+
+#### Summary by pinning effect
+
+Aggregating all runs (regardless of kernel, guest, and stressor) by the "pinning" variable alone, the effect is clear:
+
+| **Configuration** | **Avg mean latency (µs)** | **Max worst latency (µs)** | **Total overflows** | **Runs with overflow >0** |
+| --- | --- | --- | --- | --- |
+| Pinned guests (LL+NRT) | 32.6 | 35.984 | 48 | 2 / 15 |
+| Unpinned guests (LL+NRT) | 35.4 | 61.826 | 179 | 8 / 16 |
+
+vCPU pinning reduces both the mean latency (by about 3-4 µs) and, above all, the frequency and magnitude of overflow events. Almost all the overflows observed in the study come from unpinned runs.
+
+### 1- vCPU pinning is the dominant factor
+
+Across all tested combinations, the configurations with active pinning show an almost deterministic behavior: maximum latency almost always below 550 µs and zero overflows, with only [two isolated exceptions](#4--isolated-anomalies-not-reproducible-between-kernels). This result is independent of the Dom0 kernel (LL or NRT) and the guest type: the benefit therefore derives primarily from the isolation of scheduling resources, rather than from the low-latency kernel itself.
+
+![stressor   on Xen](tests_various_stessors/plots/stressor_LL_pinned_guest_NRT_pinned_HVM_boxplot.svg)
+
+![stressor   on Xen](tests_various_stessors/plots/stressor_NRT_pinned_guest_nrt_pinned_HVM_boxplot.svg)
+
+![stressor   on Xen](tests_various_stessors/plots/stressor_LL_pinned_guest_rt5_pinned_HVM_boxplot.svg)
+
+![stressor   on Xen](tests_various_stessors/plots/stressor_NRT_pinned_guest_rt5_pinned_HVM_boxplot.svg)
+
+### 2- The unpinned "nrt-hvm" guest is the most fragile configuration in the dataset
+
+Regardless of the Dom0 kernel used (LL or NRT), the unpinned nrt-hvm guest shows maximum latencies in the order of tens of milliseconds under the interrupts and rawsock stressors (up to ~62 ms), with 11-18 overflow events. The absolute worst case in the whole study is NRT + nrt-hvm + cache, with 88 overflows out of a total of ~4.78 million cycles and a maximum latency of 61.6 ms.
+
+The fact that the problem occurs with both Dom0 kernels indicates that the cause is not primarily related to the low-latency kernel, but more likely to the configuration itself of the nrt-hvm guest domain (e.g., lack of vCPU isolation/affinity, scheduling weight in Xen).
+
+![stressor NRT guest NRT HVM on Xen](tests_various_stessors/plots/stressor_NRT_guest_NRT_HVM_boxplot.svg)
+
+![stressor NRT guest NRT HVM on Xen](tests_various_stessors/plots/stressor_LL_NRT_boxplot.svg)
+
+### 3- The "rt5" guest is systematically more stable than the "nrt" guest, whether pinned or not
+
+Given the same stressor and kernel, the rt5-hvm guest almost always shows maximum latencies in the order of hundreds of microseconds and zero overflows, even without pinning --- a significantly better behavior compared to its nrt-hvm twin under the same conditions. The only notable exception is described in the following point.
+
+![stressor NRT guest NRT HVM on Xen](tests_various_stessors/plots/stressor_LL_rt5_boxplot.svg)
+
+![stressor NRT guest NRT HVM on Xen](tests_various_stessors/plots/stressor_NRT_guest_rt5_HVM_boxplot.svg)
+
+### 4- Isolated anomalies, not reproducible between kernels
+
+The study detected three anomalous events that deviate from the otherwise clean behavior of their respective categories:
+
+* **LL, rt5-hvm guest, cache stressor**: 19 overflows and max 2.77 ms, while the same guest under all other stressors (including the same cache stressor but with the NRT kernel) remains clean (0 overflows). It seems to be a specific interaction between the LL kernel and cache stress when the rt5 guest is active.
+* **LL-pinned, nrt-pinned guest, cache stressor**: single isolated overflow at 35.98 ms, which occurred very early in the run (cycle 913 out of a total of ~4.93 million). The rest of the run is clean (secondary max ~536 µs in the other pinned conditions).
+* **NRT-pinned, nrt-pinned guest, interrupts stressor**: 47 overflows, but all concentrated in a dense cluster right in the last ~3% of the run's cycles (close to the end of the 5 minutes), not distributed throughout the test.
+
+The fact that these three events do not have a counterpart in the same guest × stressor combination tested with the other kernel suggests that they are events tied to a single run (experimental noise, test startup/shutdown phase, transient host interference) rather than a systemic and reproducible behavior of the low-latency kernel. It is not possible, with the current data, to distinguish with certainty between the two hypotheses (see point 6).
+
+### 5- The "cache" stressor is the one with the most unpredictable impact
+
+The cache stressor produces the most extreme result of the entire study (88 overflows with NRT kernel) but, in the same guest/kernel combination with active pinning, it turns out to be harmless instead (0 overflows). It is also the only stressor involved in [all three isolated anomalies](#4-isolated-anomalies-not-reproducible-between-kernels). Compared to interrupts and rawsock, which show a more uniform and predictable impact on the unpinned nrt-hvm guest, cache appears to be the stressor with the highest behavioral variance among the tested conditions.
+
+### 6- Kernel LL vs NRT difference: no clear winner on unpinned guests
+
+Comparing LL and NRT on the same unpinned guest/stressor combination, no kernel emerges as systematically better than the other. For example, on the nrt-hvm guest with cache stressor, LL reports 1 overflow (max 2.77 ms) against the 88 overflows of NRT (max 61.6 ms) --- a result clearly in favor of LL. But on the rt5-hvm guest with the same cache stressor, NRT is clean (0 overflows) while LL reports 19 overflows. This crossed pattern indicates that the kernel × guest × stressor interaction is more complex than a simple "the low-latency kernel always reduces latency", and that the benefit of the PREEMPT_RT kernel in this setup is, given the current state of the data, less decisive than vCPU pinning.
+
+## Summary of results
+
+* The factor that influences latency quality more than any other is **vCPU pinning**: almost zero overflows on all pinned configurations, regardless of kernel and stressor.
+* The **rt5-hvm** guest performs better than the **nrt-hvm** guest in every tested condition, pinning aside.
+* The **unpinned nrt-hvm** guest is unreliable under load (except in the baseline scenario), with peaks up to ~62 ms regardless of the Dom0 kernel.
+* The **low-latency (LL/PREEMPT_RT)** kernel does not guarantee, in this dataset, a systematic improvement compared to the standard kernel (NRT): direct comparison shows crossed results depending on the guest/stressor combination.
+* The **cache** stressor is the one that generates the greatest variability in results, including the absolute worst case of the study and all three isolated anomalies detected.
+---
 
 ## TACLe Benchmark
 
