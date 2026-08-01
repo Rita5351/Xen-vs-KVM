@@ -31,11 +31,13 @@ NOISY_GUEST_SETTLE_TIME=300
 # GRUB entries — Dom0 runs the rt5-ll kernel with 4 vCPUs, idle (no Dom0 load)
 # ---------------------------------------------------------------------------
 declare -A KERNELS=(
+    ["NRT-4vcpu"]="Xen 4.17-amd64 Linux 6.18.35 Dom0 4 vCPUs"
+    ["NRT-4vcpu-pinned"]="Xen 4.17-amd64 Linux 6.18.35 Dom0 4 vCPUs and pinning"
     ["LL-4vcpu"]="Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 4 vCPUs"
     ["LL-4vcpu-pinned"]="Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 4 vCPUs and pinning"
 )
 
-KERNEL_ORDER=("LL-4vcpu" "LL-4vcpu-pinned")
+KERNEL_ORDER=("NRT-4vcpu" "NRT-4vcpu-pinned" "LL-4vcpu" "LL-4vcpu-pinned")
 
 # ---------------------------------------------------------------------------
 # Noisy DomU — always present during cyclictest runs.
@@ -45,6 +47,8 @@ KERNEL_ORDER=("LL-4vcpu" "LL-4vcpu-pinned")
 
 # Per-kernel noisy guest: key -> "domain_name /path/to/conf"
 declare -A NOISY_GUESTS=(
+    ["NRT-4vcpu"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big.conf"
+    ["NRT-4vcpu-pinned"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big-pinned.conf"
     ["LL-4vcpu"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big.conf"
     ["LL-4vcpu-pinned"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big-pinned.conf"
 )
@@ -69,6 +73,8 @@ declare -A GUESTS=(
 
 # Per-kernel regular guest list (pinning must match Dom0 and the noisy guest)
 declare -A KERNEL_GUEST_MAP=(
+    ["NRT-4vcpu"]="guest-nrt-hvm guest-rt5-hvm"
+    ["NRT-4vcpu-pinned"]="guest-nrt-pinned-hvm guest-rt5-pinned-hvm"
     ["LL-4vcpu"]="guest-nrt-hvm guest-rt5-hvm"
     ["LL-4vcpu-pinned"]="guest-nrt-pinned-hvm guest-rt5-pinned-hvm"
 )
