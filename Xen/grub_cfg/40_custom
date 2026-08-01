@@ -1,0 +1,107 @@
+#!/bin/sh
+exec tail -n +3 $0
+# This file provides an easy way to add custom menu entries.  Simply type the
+# menu entries you want to add after this comment.  Be careful not to change
+# the 'exec tail' line above.
+
+menuentry 'Xen 4.17-amd64 Linux 6.18.35 Dom0 22 vCPUs' --class ubuntu --class gnu-linux --class gnu --class os --class xen $menuentry_id_option 'xen-6.18.35-22vcpu' {
+                        insmod part_gpt
+                        insmod ext2
+                        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
+                        echo    'Loading Xen 4.17-amd64 ...'
+                        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
+                            xen_rm_opts=
+                        else
+                            xen_rm_opts="no-real-mode edd=off"
+                        fi
+                        multiboot2      /xen-4.17-amd64.gz dom0_max_vcpus=22 ${xen_rm_opts}
+                        echo    'Loading Linux 6.18.35 ...'
+                        module2 /vmlinuz-6.18.35 placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
+                        echo    'Loading initial ramdisk ...'
+                        module2 --nounzip   /initrd.img-6.18.35
+}
+
+menuentry 'Xen 4.17-amd64 Linux 6.18.35 Dom0 22 vCPUs and pinning' --class ubuntu --class gnu-linux --class gnu --class os --class xen $menuentry_id_option 'xen-6.18.35-22vcpu-pinned' {
+			insmod part_gpt
+                        insmod ext2
+                        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
+			echo    'Loading Xen 4.17-amd64 ...'
+                        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
+                            xen_rm_opts=
+                        else
+                            xen_rm_opts="no-real-mode edd=off"
+                        fi
+                        multiboot2      /xen-4.17-amd64.gz sched=null dom0_max_vcpus=22 dom0_vcpus_pin ${xen_rm_opts}
+                        echo    'Loading Linux 6.18.35 ...'
+                        module2 /vmlinuz-6.18.35 placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
+                        echo    'Loading initial ramdisk ...'
+                        module2 --nounzip   /initrd.img-6.18.35
+}
+
+menuentry 'Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 22 vCPUs' --class ubuntu --class gnu-linux --class gnu --class os --class xen $menuentry_id_option 'xen-6.18.35-rt5-22vcpu' {
+                        insmod part_gpt
+                        insmod ext2
+                        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
+                        echo    'Loading Xen 4.17-amd64 ...'
+                        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
+                            xen_rm_opts=
+                        else
+                            xen_rm_opts="no-real-mode edd=off"
+                        fi
+                        multiboot2      /xen-4.17-amd64.gz dom0_max_vcpus=22 ${xen_rm_opts}
+                        echo    'Loading Linux 6.18.35-rt5-ll ...'
+                        module2 /vmlinuz-6.18.35-rt5-ll placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
+                        echo    'Loading initial ramdisk ...'
+                        module2 --nounzip   /initrd.img-6.18.35-rt5-ll
+}
+
+menuentry 'Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 22 vCPUs and pinning' --class ubuntu --class gnu-linux --class gnu --class os --class xen $menuentry_id_option 'xen-6.18.35-rt5-ll-22vcpu-pinned' {
+                        insmod part_gpt
+                        insmod ext2
+                        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
+                        echo    'Loading Xen 4.17-amd64 ...'
+                        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
+                            xen_rm_opts=
+                        else
+                            xen_rm_opts="no-real-mode edd=off"
+                        fi
+                        multiboot2      /xen-4.17-amd64.gz sched=null dom0_max_vcpus=22 dom0_vcpus_pin ${xen_rm_opts}
+                        echo    'Loading Linux 6.18.35-rt5-ll ...'
+                        module2 /vmlinuz-6.18.35-rt5-ll placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
+                        echo    'Loading initial ramdisk ...'
+                        module2 --nounzip   /initrd.img-6.18.35-rt5-ll
+}
+
+menuentry 'Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 4 vCPUs' --class ubuntu --class gnu-linux --class gnu --class os --class xen $menuentry_id_option 'xen-6.18.35-rt5-ll-4vcpu' {
+                        insmod part_gpt
+                        insmod ext2
+                        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
+                        echo    'Loading Xen 4.17-amd64 ...'
+                        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
+                            xen_rm_opts=
+                        else
+                            xen_rm_opts="no-real-mode edd=off"
+                        fi
+                        multiboot2      /xen-4.17-amd64.gz dom0_max_vcpus=4 ${xen_rm_opts}
+                        echo    'Loading Linux 6.18.35-rt5-ll ...'
+                        module2 /vmlinuz-6.18.35-rt5-ll placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
+                        echo    'Loading initial ramdisk ...'
+                        module2 --nounzip   /initrd.img-6.18.35-rt5-ll
+}
+
+menuentry 'Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 4 vCPUs and pinning' --class ubuntu --class gnu-linux --class gnu --class os --class xen $menuentry_id_option 'xen-6.18.35-rt5-ll-4vcpu-pinned' {
+                        insmod part_gpt
+                        insmod ext2
+                        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
+                        echo    'Loading Xen 4.17-amd64 ...'
+                        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
+                            xen_rm_opts=
+                        else
+                            xen_rm_opts="no-real-mode edd=off"
+                        fi
+                        multiboot2      /xen-4.17-amd64.gz sched=null dom0_max_vcpus=4 dom0_vcpus_pin ${xen_rm_opts}
+                        echo    'Loading Linux 6.18.35-rt5-ll ...'
+                        module2 /vmlinuz-6.18.35-rt5-ll placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
+                        echo    'Loading initial ramdisk ...'
+                        module2 --nounzip   /initrd.img-6.18.35-rt5-ll
+}
