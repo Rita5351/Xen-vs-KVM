@@ -997,6 +997,80 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 ![TACLe benchmark - test3 execution time on Xen](tests_TACLe/plots/Xen_TACLe_test3_boxplot.svg)
 
+---
+
+As previously mentioned, following the tests conducted, new studies have been added: the latter compares the temporal behavior (execution latency) of five benchmarks from the TACLe suite --- debie, huff_enc, lift, matrix1, test3 --- executed inside an HVM DomU on Xen, a Type 1 hypervisor, under two configurations of the low-latency Dom0 kernel ("LL", Linux 6.18.35-rt5-ll): without vCPU pinning and with pinning. The goal is to understand whether and to what extent pinning improves the temporal predictability of the system, and if it introduces non-obvious side effects.
+
+Data collection was automated with the provided bash script, which orchestrates the entire end-to-end experiment:
+
+* **Dom0**: Xen 4.17-amd64 on Linux 6.18.35, 22 allocated vCPUs; kernel switching managed via grub-reboot across four variants (NRT, NRT-pinned, LL, LL-pinned).
+* **DomU**: HVM Ubuntu 24.04 DomU, in two configuration variants --- unpinned and pinned --- corresponding to the type of Dom0 kernel under test.
+* **Background workload ("always-on")**: `stress-ng --cpu 22` and `stress-ng --vm 12 --vm-bytes 2G`, started on Dom0 before each run and kept active for the entire duration of the scenario, to simulate a Dom0 under realistic pressure.
+* **Sequential stressors** planned by the script: baseline (no additional stressor), cache, interrupts, rawsock --- launched one at a time alongside the background workload.
+* **Automation**: creation/destruction of the DomU via xl, collection of log files from the DomU's virtual disk after shutdown, process and cache cleanup between runs.
+
+**Methodological note**: the 10 provided files are execution time histograms of the TACLe benchmarks themselves (not of cyclictest, which is the workload shown in the script). The file names do not report which sequential stressor scenario was active during capture --- this is information to be retrieved in order to confidently attribute the observed differences solely to pinning and not to a mix of different conditions between the two runs.
+
+### Statistics extracted per file
+
+| **Benchmark** | **Config** | **Min (µs)** | **Media (µs)** | **p99 (µs)** | **Massimo (µs)** | **Overflow** |
+|---------------|------------|--------------|----------------|--------------|------------------|--------------|
+| debie         | LL         | 30212.0      | 37133.0        | 46259.0      | 72372.0          | 0            |
+| debie         | LL-pinned  | 23976.0      | 27275.0        | 29703.0      | 39230.0          | 0            |
+| huff_enc      | LL         | 15.8         | 25.0           | 38.9         | 496.2            | 0            |
+| huff_enc      | LL-pinned  | 15.9         | 16.5           | 26.7         | 1204.0           | 1            |
+| lift          | LL         | 29.7         | 37.6           | 52.3         | 211.6            | 0            |
+| lift          | LL-pinned  | 19.7         | 20.2           | 32.9         | 902.5            | 0            |
+| matrix1       | LL         | 0.65         | 0.79           | 0.94         | 47.0             | 0            |
+| matrix1       | LL-pinned  | 0.52         | 0.55           | 0.69         | 13.1             | 0            |
+| test3         | LL         | 8322.0       | 9789.0         | 13279.0      | 17705.0          | 0            |
+| test3         | LL-pinned  | 8228.0       | 8277.0         | 8335.0       | 16260.0          | 0            |
+
+
+#### Results
+
+The following graph summarizes, for each benchmark, the percentage variation of the mean, p99, and maximum when going from LL to LL-pinned (negative values = improvement).
+
+![Effetto del pinning delle vCPU sulla latenza per benchmark](tests_tacle_dom0_stress/plots/latency_delta_chart.png)
+
+*Percentage variation of the mean, p99, and maximum (LL-pinned vs LL) for the five TACLe benchmarks: debie, huff_enc, lift, matrix1, test3.*
+
+#### % Variation LL-pinned vs LL
+| **Benchmark** | **Δ Media** | **Δ p99** | **Δ Massimo** |
+|---------------|-------------|-----------|---------------|
+| debie         | -26.5%      | -35.8%    | -45.8%        |
+| huff_enc      | -34.1%      | -31.4%    | +142.6%       |
+| lift          | -46.3%      | -37.0%    | +326.5%       |
+| matrix1       | -30.7%      | -26.6%    | -72.1%        |
+| test3         | -15.4%      | -37.2%    | -8.2%         |
+
+---
+
+### 1- Pinning systematically improves typical latency
+
+Across all five benchmarks, without exception, vCPU pinning reduces both the mean latency (from -15% to -46%) and the p99 (from -27% to -37%). This confirms the expected effect: fixing the DomU vCPUs to dedicated physical cores eliminates the variability introduced by the Dom0 scheduler and inter-core migrations, making the temporal behavior more predictable in the typical case.
+
+### 2- Tail anomaly: pinning worsening the worst case
+
+On debie, matrix1, and test3, pinning also improves the worst-case (lower maximum). But on lift and huff_enc the opposite happens: the maximum latency increases drastically (+326% on lift, +143% on huff_enc), and huff_enc-pinned registers a histogram overflow, a sign that at least one sample exceeded even the maximum expected bucket --- the actual peak could therefore be even higher than reported.
+
+This is the most significant result to document: pinning is not a unilateral guarantee of improvement. It reduces variance in the common case, but if the pinned core is not completely isolated from external interruptions (housekeeping IRQs, Dom0 timers, one of the stressors), when that rare interference occurs its impact is concentrated entirely on a single dedicated core instead of being distributed, producing an isolated spike much larger than what would happen with free scheduling.
+
+![TACLe benchmark - debie stress dom0](tests_tacle_dom0_stress/plots/stressor_TACLe_debie_boxplot.svg)
+
+![TACLe benchmark - matrix1 stress dom0](tests_tacle_dom0_stress/plots/stressor_TACLe_matrix1_boxplot.svg)
+
+![TACLe benchmark - test3 stress dom0](tests_tacle_dom0_stress/plots/stressor_TACLe_test3_boxplot.svg)
+
+### 3- Consistency between scale and behavior
+
+The order of magnitude of latency varies greatly between benchmarks (from hundreds of nanoseconds for matrix1 to tens of milliseconds for debie), reflecting the different computational complexity of the TACLe workloads. The mean/p99 improvement pattern with pinning is maintained regardless of the scale, which reinforces the idea that it is a structural effect of pinning itself and not an artifact linked to the duration of the single benchmark.
+
+![TACLe benchmark - lift stress dom0](tests_tacle_dom0_stress/plots/stressor_TACLe_lift_boxplot.svg)
+
+![TACLe benchmark - huff_enc stress dom0](tests_tacle_dom0_stress/plots/stressor_TACLe_huffenc_boxplot.svg)
+
+---
 ## PV and PVH DomUs
 
 In their previous work, Abeni and Faggioli concluded that in Xen, virtualization technology played a major role in scheduling latencies due to a priority inversion bug in how the Device Model operated. Specifically, they noted that the QEMU process acting as the DomU DM did not execute with high priority, allowing it to be preempted by the workload.
