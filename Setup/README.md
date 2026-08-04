@@ -185,6 +185,101 @@ While applying the aforementioned isolation technique, we appended specific para
     </cpu>
    ```
 
+### 1. Implementation of the Control and Test Script
+
+The Bash script invokes `cyclictest` for a 5-minute duration, redirects the results to a log file, and disables the service upon completion to prevent execution on subsequent normal boots.
+
+#### Step 1.1: Script creation
+Create a new executable file in the system path dedicated to local scripts:
+
+```bash
+sudo nano /usr/local/bin/run_cyclictest.sh
+```
+
+#### Step 1.2: Script code (`run_cyclictest.sh`)
+Paste the following code inside the file:
+
+```bash
+#!/bin/bash
+
+# Paths configuration
+LOG_DIR="/var/log/cyclictest_results"
+
+# Ensure the log directory exists
+mkdir -p "$LOG_DIR"
+
+# Wait for system to fully settle before starting the test
+sleep 30
+
+# Execute cyclictest with Real-Time priority for 5 minutes
+sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile="$LOG_DIR/results_hist.log"
+
+# Termination condition: remove the service to prevent running on future reboots
+systemctl disable cyclictest-autorun.service
+```
+
+#### Step 1.3: Assign execution permissions
+Configure the correct POSIX permissions to allow systemd to invoke the script:
+
+```bash
+sudo chmod +x /usr/local/bin/run_cyclictest.sh
+```
+
+---
+
+### 2. Configuration of the Systemd Unit Service
+
+To ensure the script is executed immediately after the boot phase and in a non-interactive context, a `oneshot` type systemd service is implemented.
+
+#### Step 2.1: Unit file creation
+Create the service descriptor within the system units directory:
+
+```bash
+sudo nano /etc/systemd/system/cyclictest-autorun.service
+```
+
+#### Step 2.2: Service structure (`cyclictest-autorun.service`)
+Configure the unit with the following directives:
+
+```ini
+[Unit]
+Description=Cyclictest Automation 5-Min Run
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/run_cyclictest.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+### 3. Enabling and Executing the Flow
+
+Once the components are defined, it is necessary to notify the service manager of the changes and enable the automatic startup of the test.
+
+#### Step 3.1: Reload the systemd daemon
+```bash
+sudo systemctl daemon-reload
+```
+
+#### Step 3.2: Enable the service at boot
+```bash
+sudo systemctl enable cyclictest-autorun.service
+```
+
+#### Step 3.3: Triggering the test
+To start the automated 5-minute test, perform a manual reboot of the KVM virtual machine:
+
+```bash
+sudo reboot
+```
+
+After the system boots, it will wait 30 seconds and then run the test for exactly 5 minutes. At the end of the process, the results will be available in `/var/log/cyclictest_results/results_hist.log`, the service will automatically disable itself, and the system will remain stably booted on the set kernel.
+
 ## Xen
 
 ### Installation and GUI Troubleshooting
@@ -369,4 +464,28 @@ To be absolutely certain of the vCPUS to pCPUs fixed mapping, we also executed t
 ```bash
 sudo xl vcpu-pin ubuntu-24.04-linux-6.18.35-rt5 0 22
 sudo xl vcpu-pin ubuntu-24.04-linux-6.18.35-rt5 1 23
+```
+
+### 1. Accessing Dom0 via SSH
+To launch a shell on the Dom0 administrative domain, a remote connection was established from a secondary machine. This approach allows for the remote execution of commands as if operating locally, which is a necessary step since in our setup the system running the Xen hypervisor lacked a Graphical User Interface (GUI).
+
+#### Step 1.1: Establishing the remote connection
+Execute the following command to access Dom0 from the secondary machine:
+
+```bash
+ssh unina@192.168.1.166
+```
+
+#### Step 1.2: Guest domain creation
+Subsequently, a guest virtual machine (DomU) was initialized based on the configuration specified during the setup phase by executing the following command:
+
+```bash
+sudo xl create -c /etc/xen/ubuntu-24.04-linux-6.18.35.conf
+```
+
+#### Step 1.3: Executing the cyclictest utility
+Finally, the `cyclictest` tool was executed to measure system latency, employing the identical parameters previously defined for the KVM testing environment:
+
+```bash
+sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile="results_ll_rt.log"
 ```

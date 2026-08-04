@@ -1,29 +1,53 @@
 # Xen
-This section describes the detailed procedure to configure a consistent test cycle for the virtual machine. The system allows accessing the system with SSH and running the `cyclictest` utility to evaluate scheduling latency.
 
-### 1. Accessing Dom0 via SSH
-To launch a shell on the Dom0 administrative domain, a remote connection was established from a secondary machine. This approach allows for the remote execution of commands as if operating locally, which is a necessary step since in our setup the system running the Xen hypervisor lacked a Graphical User Interface (GUI).
+This document provides a detailed analysis of scheduling latencies and determinism within a Xen virtualized environment. The data presented evaluates the system's behavior across different hypervisor configurations, scheduler choices, and system loads, focusing on the performance of both the privileged control domain (Dom0) and the unprivileged user domain (DomU) under various kernel tunings.
 
-#### Step 1.1: Establishing the remote connection
-Execute the following command to access Dom0 from the secondary machine:
+The experiments are structured into the following key phases:
 
-```bash
-ssh unina@192.168.1.166
-```
+* [Baseline Performance Analysis with Credit2 Scheduler](#baseline-performance-analysis-with-credit2-scheduler)
+  * [Non-Real-Time Dom0 and Non-Real-Time DomU](#non-real-time-dom0-and-non-real-time-domu-credit2-scheduler)
+  * [Non-Real-Time Dom0 and Real-Time DomU](#non-real-time-dom0-and-real-time-domu-credit2-scheduler)
+  * [Low Latency Dom0 and Non-Real-Time DomU](#low-latency-dom0-and-non-real-time-domu-credit2-scheduler)
+  * [Low Latency Dom0 and Real-Time DomU](#low-latency-dom0-and-real-time-domu-credit2-scheduler)
+* [Impact of the Stress Workload on Latencies](#impact-of-the-stress-workload-on-latencies)
+  * [Non-Real-Time Dom0 and Non-Real-Time DomU](#non-real-time-dom0-and-non-real-time-domu-credit2-scheduler-1)
+  * [Non-Real-Time Dom0 and Real-Time DomU](#non-real-time-dom0-and-real-time-domu-credit2-scheduler-1)
+  * [Low Latency Dom0 and Non-Real-Time DomU](#low-latency-dom0-and-non-real-time-domu-credit2-scheduler-1)
+  * [Low Latency Dom0 and Real-Time DomU](#low-latency-dom0-and-real-time-domu-credit2-scheduler-1)
+* [Baseline Performance Analysis with Static vCPU Pinning](#baseline-performance-analysis-with-static-vcpu-pinning)
+  * [Non-Real-Time Dom0 and Non-Real-Time DomU](#non-real-time-dom0-and-non-real-time-domu-null-scheduler)
+  * [Non-Real-Time Dom0 and Real-Time DomU](#non-real-time-dom0-and-real-time-domu-null-scheduler)
+  * [Low Latency Dom0 and Non-Real-Time DomU](#low-latency-dom0-and-non-real-time-domu-null-scheduler)
+  * [Low Latency Dom0 and Real-Time DomU](#low-latency-dom0-and-real-time-domu-null-scheduler)
+* [Impact of the Stress Workload on Latencies with vCPU Pinning](#impact-of-the-stress-workload-on-latencies-with-vcpu-pinning)
+  * [Non-Real-Time Dom0 and Non-Real-Time DomU](#non-real-time-dom0-and-non-real-time-domu-null-scheduler-1)
+  * [Non-Real-Time Dom0 and Real-Time DomU](#non-real-time-dom0-and-real-time-domu-null-scheduler-1)
+  * [Low Latency Dom0 and Non-Real-Time DomU](#low-latency-dom0-and-non-real-time-domu-null-scheduler-1)
+  * [Low Latency Dom0 and Real-Time DomU](#low-latency-dom0-and-real-time-domu-null-scheduler-1)
+* [Summary of Results](#summary-of-results)
+* [Analysis of Device Model priority inversion in modern Xen](#analysis-of-device-model-priority-inversion-in-modern-xen)
+* [Impact of different stressors on latencies](#impact-of-different-stressors-on-latencies)
+* [TACLe Benchmark](#tacle-benchmark)
+  * [TACLeBench Baseline Execution Analysis](#taclebench-baseline-execution-analysis)
+  * [TACLeBench Small Noise Execution Analysis](#taclebench-small-noise-execution-analysis)
+  * [TACLeBench Big Noise Execution Analysis](#taclebench-big-noise-execution-analysis)
+  * [TACLeBench Big Noise Pinned Execution Analysis](#taclebench-big-noise-pinned-execution-analysis) 
+  * [Max Latency Summary](#max-latency-summary-μs)
+  * [TACLeBench with stress on Dom0](#taclebench-with-stress-on-dom0)
+* [PV and PVH DomUs](#pv-and-pvh-domus)
+  * [Low Latency Dom0 and Low Latency DomU (PV DomU)](#low-latency-dom0-and-low-latency-domu-pv-domu)
+  * [Low Latency Dom0 and Real-Time DomU (PVH DomU)](#low-latency-dom0-and-real-time-domu-pvh-domu)
+* [Impact of the Stress Workload on Different Virtualization Technologies](#impact-of-the-stress-workload-on-different-virtualization-technologies)
+  * [Low Latency Dom0 and Low Latency DomU (PV DomU)](#low-latency-dom0-and-low-latency-domu-pv-domu-1)
+  * [Low Latency Dom0 and Real-Time DomU (PVH DomU)](#low-latency-dom0-and-real-time-domu-pvh-domu-1)
+* [Comparative Analysis of PV and PVH Architectures under Static Allocation](#comparative-analysis-of-pv-and-pvh-architectures-under-static-allocation)
+  * [Low Latency Dom0 and Low Latency DomU (PV DomU)](#low-latency-dom0-and-low-latency-domu-pv-domu-2)
+  * [Low Latency Dom0 and Real-Time DomU (PVH DomU)](#low-latency-dom0-and-real-time-domu-pvh-domu-2)
+* [Impact of the Stress Workload on PV and PVH Architectures under Static Allocation](#impact-of-the-stress-workload-on-pv-and-pvh-architectures-under-static-allocation)
+  * [Low Latency Dom0 and Low Latency DomU (PV DomU)](#low-latency-dom0-and-low-latency-domu-pv-domu-3)
+  * [Low Latency Dom0 and Real-Time DomU (PVH DomU)](#low-latency-dom0-and-real-time-domu-pvh-domu-3)
+* [Summary of Results (PV and PVH)](#summary-of-results-pv-and-pvh)
 
-#### Step 1.2: Guest domain creation
-Subsequently, a guest virtual machine (DomU) was initialized based on the configuration specified during the setup phase by executing the following command:
-
-```bash
-sudo xl create -c /etc/xen/ubuntu-24.04-linux-6.18.35.conf
-```
-
-#### Step 1.3: Executing the cyclictest utility
-Finally, the `cyclictest` tool was executed to measure system latency, employing the identical parameters previously defined for the KVM testing environment:
-
-```bash
-sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile="results_ll_rt.log"
-```
 ## BASELINE PERFORMANCE ANALYSIS WITH CREDIT2 SCHEDULER
 
 This section presents a detailed analysis of execution latencies measured within a virtualized environment based on the Xen bare-metal (Type-1) hypervisor. The primary objective is to evaluate the system's behavior and the virtualization overhead utilizing the default general-purpose scheduler, Credit2. This establishes a fundamental performance baseline before exploring more restrictive static configurations, such as vCPU pinning or the adoption of the NULL scheduler.
@@ -39,7 +63,7 @@ The analyses in the following paragraphs offer a comprehensive overview of the l
 
 ![Baseline Performance - Credit2 Scheduler (No Noise)](tests/plots/svg/xen_nonoise.svg)
 
-### NON-REAL-TIME KERNEL AND NON-REAL-TIME VM (CREDIT2 SCHEDULER)
+### NON-REAL-TIME DOM0 AND NON-REAL-TIME DOMU (CREDIT2 SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. The objective of this analysis is to evaluate the baseline latency, virtualization overhead, and scheduling patterns provided by Xen's general-purpose scheduler during a sustained workload.
 
@@ -57,7 +81,7 @@ The empirical observation of this sustained test provides initial insights into 
 * **Suitability:** This configuration appears capable of handling general-purpose workloads. However, the 369 µs peak suggests that further configuration might be needed if stricter real-time constraints are required.
 
 
-### NON-REAL-TIME KERNEL AND REAL-TIME VM (CREDIT2 SCHEDULER)
+### NON-REAL-TIME DOM0 AND REAL-TIME DOMU (CREDIT2 SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. The configuration features a standard (Non-Real-Time) Linux Dom0 and a `PREEMPT_RT` patched DomU. The objective is to observe how effectively the guest's internal scheduling can manage execution times despite the privileged domain having a general-purpose scheduler.
 
@@ -74,7 +98,7 @@ The empirical observation of this sustained test provides insights into the beha
 * **Hypervisor-Induced Jitter:** The average latency of 33 µs and the wide variance of nominal samples suggest that the Credit2 scheduler introduces inherent jitter that guest-side optimizations cannot entirely remove.
 * **Internal Determinism:** In this hybrid configuration, the guest-level real-time optimizations appeared to help maintain tighter temporal constraints, offering a potential solution for applications sensitive to large latency spikes.
 
-### LOW LATENCY KERNEL AND NON-REAL-TIME VM (CREDIT2 SCHEDULER)
+### LOW LATENCY DOM0 AND NON-REAL-TIME DOMU (CREDIT2 SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. For this specific test, the Dom0 operating system was configured with a "Low Latency" kernel while the DomU maintained a Non-Real-Time (NRT) kernel, to evaluate the effects of a modified Dom0 on the latency of the other guests.
 
@@ -91,7 +115,7 @@ The empirical observation of this sustained test provides insights into the capa
 * **Persistent Hypervisor Jitter:** The average latency of 32 µs and the broad spread of nominal samples confirm that the hypervisor's scheduler likely dictates the baseline jitter.
 * **Suitability:** This configuration presents a potential middle-ground, appearing to offer improved predictability compared to a standard kernel without the complexity of maintaining a full `PREEMPT_RT` patch.
 
-### LOW LATENCY KERNEL AND REAL-TIME VM (CREDIT2 SCHEDULER)
+### LOW LATENCY DOM0 AND REAL-TIME DOMU (CREDIT2 SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. This specific configuration features a Low Latency kernel Dom0 and a Real-Time DomU.
 
@@ -110,7 +134,7 @@ The empirical observation of this sustained test provides insights into the beha
 
 ![Baseline Performance - Credit2 Scheduler (No Noise)](tests/plots/svg/Xen_baseline_performance_c2_boxplot.svg)
 
-## Impact of the Stress Workload on Latencies
+## IMPACT OF THE STRESS WORKLOAD ON LATENCIES
 
 To evaluate system robustness and trigger potentially higher latencies, the testing methodology involves introducing an additional load, defined as a "stress workload". In the case of the Xen hypervisor, this stress workload is executed in the background within the privileged Dom0, utilizing the general-purpose `SCHED_OTHER` scheduling policy alongside the default Credit2 scheduler. 
 
@@ -124,7 +148,7 @@ In this section, we reproduce these stress experiments and analyze the detailed 
 
 ![Performance under Stress Workload - Credit2 Scheduler](tests/plots/svg/xen_backgroundnoise.svg)
  
-### NON-REAL-TIME HOST KERNEL AND NON-REAL-TIME GUEST KERNEL (CREDIT2 SCHEDULER)
+### NON-REAL-TIME DOM0 AND NON-REAL-TIME DOMU (CREDIT2 SCHEDULER)
  
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. The objective of this analysis is to evaluate the baseline latency, virtualization overhead, and scheduling patterns provided by Xen's general-purpose scheduler during a sustained workload.
  
@@ -147,7 +171,7 @@ The empirical observation of this sustained test provides initial insights into 
 * **Suitability:** This configuration appears capable of handling general-purpose workloads. However, the 239 µs peak suggests that further configuration might be needed if stricter real-time constraints are required.
 
 
-### NON-REAL-TIME HOST KERNEL AND REAL-TIME GUEST KERNEL (CREDIT2 SCHEDULER)
+### NON-REAL-TIME DOM0 AND REAL-TIME DOMU (CREDIT2 SCHEDULER)
  
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. The configuration features a standard (Non-Real-Time) Linux Dom0 and a `PREEMPT_RT` patched DomU. The objective is to observe how effectively the guest's internal scheduling can manage execution times despite the privileged domain having a general-purpose scheduler.
  
@@ -169,7 +193,7 @@ The empirical observation of this sustained test provides insights into the beha
 
 * **Internal Determinism:** In this hybrid configuration, the guest-level real-time optimizations appeared to help maintain tighter temporal constraints, offering a potential solution for applications sensitive to large latency spikes.
  
-### LOW LATENCY HOST KERNEL AND NON-REAL-TIME GUEST KERNEL (CREDIT2 SCHEDULER)
+### LOW LATENCY DOM0 AND NON-REAL-TIME DOMU (CREDIT2 SCHEDULER)
  
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. For this specific test, the Dom0 operating system was configured with a "Low Latency" kernel while the DomU maintained a Non-Real-Time (NRT) kernel, to evaluate the effects of a modified Dom0 on the latency of the other guests.
  
@@ -191,7 +215,7 @@ The empirical observation of this sustained test provides insights into the capa
 
 * **Suitability:** This configuration introduces unpredictable maximum latencies, suggesting that a Low Latency Dom0 without a corresponding RT guest may negatively impact worst-case response times.
  
-### LOW LATENCY HOST KERNEL AND REAL-TIME GUEST KERNEL (CREDIT2 SCHEDULER)
+### LOW LATENCY DOM0 AND REAL-TIME DOMU (CREDIT2 SCHEDULER)
  
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the default Credit2 scheduler. This specific configuration features a Low Latency kernel Dom0 and a Real-Time DomU.
  
@@ -233,7 +257,7 @@ By enforcing this absolute isolation, the active scheduling algorithms are entir
 
 ![Baseline Performance - Static vCPU Pinning/Null Scheduler (No Noise)](tests/plots/svg/xen_null_nonoise.svg)
 
-### NON-REAL-TIME KERNEL AND NON-REAL-TIME VM (NULL SCHEDULER)
+### NON-REAL-TIME DOM0 AND NON-REAL-TIME DOMU (NULL SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the Null scheduler. The objective of this analysis is to evaluate the baseline latency, virtualization overhead, and scheduling patterns provided by Xen's static, dedicated CPU allocation scheduler during a sustained workload.
 
@@ -250,7 +274,7 @@ The empirical observation of this sustained test provides insights into the beha
 * **Average Jitter:** The average latency of 32 µs highlights that the baseline virtualization jitter remains, despite the absence of a dynamic scheduling algorithm.
 * **Suitability:** This configuration demonstrates much better predictability for latency-sensitive tasks than standard schedulers, offering a much lower peak latency.
 
-### NON-REAL-TIME KERNEL AND REAL-TIME VM (NULL SCHEDULER)
+### NON-REAL-TIME DOM0 AND REAL-TIME DOMU (NULL SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the Null scheduler. The configuration features a standard (Non-Real-Time) Linux Dom0 and a `PREEMPT_RT` patched DomU. The objective is to observe how effectively the guest's internal scheduling can manage execution times when provided with a dedicated, non-preempted virtual CPU by the hypervisor.
 
@@ -267,7 +291,7 @@ The empirical observation of this sustained test provides insights into the beha
 * **Hypervisor-Induced Jitter:** The average latency of 32 µs suggests that the inherent virtualization layer jitter cannot be entirely removed by guest-side optimizations.
 * **Internal Determinism:** In this hybrid configuration, the guest-level real-time optimizations successfully maintained strict temporal constraints, heavily benefiting from the static CPU assignment of the Null scheduler.
 
-### LOW LATENCY KERNEL AND NON-REAL-TIME VM (NULL SCHEDULER)
+### LOW LATENCY DOM0 AND NON-REAL-TIME DOMU (NULL SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the Null scheduler. For this specific test, the Dom0 operating system was configured with a "Low Latency" kernel while the DomU maintained a Non-Real-Time (NRT) kernel, to evaluate the effects of a modified Dom0 on guest latencies.
 
@@ -284,7 +308,7 @@ The empirical observation of this sustained test provides insights into the capa
 * **Persistent Hypervisor Jitter:** The average latency of 32 µs confirms that the baseline virtualization overhead dictates the nominal jitter.
 * **Suitability:** This configuration presents a higher maximum latency compared to the strictly NRT environment (179 µs versus 137 µs), indicating that the Low Latency Dom0 tuning alone does not necessarily improve the worst-case bounds for a Non-Real-Time guest under static allocation.
 
-### LOW LATENCY KERNEL AND REAL-TIME VM (NULL SCHEDULER)
+### LOW LATENCY DOM0 AND REAL-TIME DOMU (NULL SCHEDULER)
 
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the Null scheduler. This specific configuration features a Low Latency kernel Dom0 and a Real-Time (`PREEMPT_RT`) DomU.
 
@@ -303,7 +327,7 @@ The empirical observation of this sustained test provides insights into the beha
 
 ![Baseline Performance - Static vCPU Pinning/Null Scheduler (No Noise)](tests/plots/svg/Xen_baseline_performance_null_boxplot.svg)
 
-## Impact of the Stress Workload on Latencies with vCPU PINNING
+## IMPACT OF THE STRESS WORKLOAD ON LATENCIES WITH vCPU PINNING
 
 To evaluate system determinism and upper latency bounds under severe conditions, the testing methodology involves executing a continuous 5-minute `cyclictest` probe while introducing a background stress workload within the privileged control domain, Dom0. Across all experiments, the Xen hypervisor is configured with static vCPU pinning—acting as a Null scheduler—to restrict vCPU migration and provide dedicated physical cores to the unprivileged domain, DomU.
 
@@ -317,7 +341,7 @@ In this section, we will analyze the detailed results of these specific configur
 
 ![Performance under Stress - Static Pinning (Default QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise.svg)
 
-### NON-REAL-TIME KERNEL AND NON-REAL-TIME VM (NULL SCHEDULER)
+### NON-REAL-TIME DOM0 AND NON-REAL-TIME DOMU (NULL SCHEDULER)
  
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing the static pinning configuration acting as a Null scheduler. The configuration features a standard (Non-Real-Time) Linux Dom0 and a Non-Real-Time DomU. The objective of this analysis is to evaluate the latency and virtualization overhead under stress conditions when both domains lack real-time optimizations.
  
@@ -333,7 +357,7 @@ The empirical observation of this sustained test provides insights into the beha
 * **Average Jitter:** The average latency of 32 µs highlights the inherent jitter introduced by the hypervisor layer itself.
 * **Suitability:** This configuration limits unbounded latency starvation, but the 443 µs peak suggests it is insufficient for strict real-time constraints under heavy workloads.
  
-### NON-REAL-TIME KERNEL AND REAL-TIME VM (NULL SCHEDULER)
+### NON-REAL-TIME DOM0 AND REAL-TIME DOMU (NULL SCHEDULER)
  
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool utilizing static vCPU pinning. The configuration features a standard (Non-Real-Time) Linux Dom0 and a `PREEMPT_RT` patched DomU. The objective is to observe how effectively the DomU's internal scheduling can manage execution times when provided with a dedicated physical core, despite the control domain lacking real-time optimizations and operating under stress.
  
@@ -349,7 +373,7 @@ The empirical observation of this sustained test provides insights into the beha
 * **Hypervisor-Induced Jitter:** The average latency of 33 µs suggests that the inherent virtualization layer jitter cannot be entirely removed by DomU-side optimizations alone.
 * **Internal Determinism:** In this hybrid configuration, the DomU-level real-time optimizations successfully maintained strict temporal constraints, heavily benefiting from the dedicated physical CPU assignment.
  
-### LOW LATENCY KERNEL AND NON-REAL-TIME VM (NULL SCHEDULER)
+### LOW LATENCY DOM0 AND NON-REAL-TIME DOMU (NULL SCHEDULER)
  
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool utilizing static vCPU pinning. For this specific test, the Dom0 operating system was configured with a Low Latency kernel while the DomU maintained a Non-Real-Time (NRT) kernel, evaluating the effects of a modified Dom0 on DomU latencies under stress.
  
@@ -365,7 +389,7 @@ The empirical observation of this sustained test provides insights into the capa
 * **Persistent Hypervisor Jitter:** The average latency of 32 µs confirms that the baseline virtualization overhead dictates the nominal jitter.
 * **Suitability:** This configuration presents a solid improvement in maximum latency over the strictly NRT environment, offering enhanced predictability without requiring a fully patched RT DomU.
  
-### LOW LATENCY KERNEL AND REAL-TIME VM (NULL SCHEDULER)
+### LOW LATENCY DOM0 AND REAL-TIME DOMU (NULL SCHEDULER)
  
 This section analyzes the results obtained from a single, prolonged 5-minute execution of the `cyclictest` tool in a Xen virtualized environment utilizing static vCPU pinning. This specific configuration features a Low Latency kernel Dom0 and a Real-Time (`PREEMPT_RT`) DomU, evaluated under stress conditions.
  
@@ -383,45 +407,8 @@ The empirical observation of this sustained test provides insights into the beha
 
 ![Performance under Stress - Static Pinning (Default QEMU Priority)](tests/plots/svg/Xen_under_Stress_performance_null_boxplot.svg)
 
-## Analysis of Device Model priority inversion in modern Xen
+## SUMMARY OF RESULTS
 
-In earlier research evaluating the real-time capabilities of hypervisors, a notable priority inversion issue was identified within the Xen architecture. The problem stems from the architectural dependency of Hardware Virtual Machine (HVM) guests on the Device Model. In Xen, when creating an HVM guest that requires a Device Model, this model is typically an instance of QEMU that executes as a standard process inside Domain 0 (Dom0). Because Dom0 is scheduled alongside other virtual machines by the hypervisor, a low-privilege QEMU process on Dom0 could be preempted when Dom0 is placed under heavy computational stress. Consequently, a Real-Time (RT) DomU waiting for the QEMU Device Model could suffer from unbounded latency, compromising its real-time execution guarantees.
-
-To investigate whether this architectural bottleneck persists in modern versions of Xen, a series of experiments were conducted. The objective is to determine if elevating the QEMU process to a maximum Real-Time priority (FIFO scheduler with priority 99) mitigates preemption and improves the latency bounds of the DomU compared to the default Xen configuration.
-
-To reproduce and analyze the aforementioned priority inversion on a modern Xen version, the environment was configured with strict resource partitioning.
-
-* **CPU Pinning**: Dom0 was pinned to the first 22 physical CPUs (pCPUs), while the Hardware Virtual Machine (HVM) DomU was pinned to the last 2 pCPUs.
-* **Host Stress**: To simulate heavy load and induce potential starvation in Dom0, stress-ng was executed with the following parameters:
-  ```bash
-  stress-ng --cpu 22 --vm 12 --vm-bytes 2G --timeout 10m
-  ```
-* **Kernel Configurations**: Tests were run across the usual four permutations of Dom0 and DomU kernels.
-* **QEMU Priority Mitigation**: For each kernel combination, a baseline test (default QEMU priority) was compared against a mitigated test (`maxprioqemu`), wherein the QEMU Device Model process in Dom0 was explicitly set to the `SCHED_FIFO` policy with a priority of 99.
-
-![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise_maxprioqemu.svg)
-
-![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/Xen_under_Stress_MaxPrioQuemu_performance_null_boxplot.svg)
-
-### Empirical Results
-
-A thorough data analysis of the provided cyclictest histograms reveals the following key findings:
-
-* **Absence of Priority Inversion Spikes**: In older versions of Xen suffering from the QEMU starvation issue, the expected symptom would be a pronounced "heavy tail" in the histogram, indicating extreme, unbounded latencies where the DomU was blocked waiting for Dom0. The empirical data across all results_null_hvm_pinned_* logs demonstrates no such extreme outliers in the default priority configurations.
-* **Latency Distribution Parity**: The latency distributions between the default configurations and their mitigated counterparts are virtually identical.
-* **Consistent Upper Bounds**: The maximum recorded latencies (Worst-Case Execution Time) in the standard configurations are directly comparable to those in the maximum priority configurations. Across both the Low-Latency (LL) and Non-Real-Time (NRT) Dom0 environments, elevating QEMU's priority did not tighten the worst-case temporal bounds.
-
-Based on the experimental data, the priority inversion problem previously documented in Section 6.2 of the Abeni and Faggioli research seems to be non-existent in this modern Xen deployment. Changing the Device Model priority yields no beneficial effect for the latency bounds of real-time tasks inside the DomU.
-
-With further experiments, we confirmed that changing the priority of the QEMU process does not improve latency even when using the Credit2 scheduler.
-
-![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/xen_backgroundnoise_maxprioqemu.svg)
-
-![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/Xen_under_Stress_MaxPrioQuemu_performance_credit2_boxplot.svg)
-
-This behavior indicates that modern Xen HVM implementations successfully decouple essential local timer and interrupt deliveries from the QEMU Device Model. Because CPU-bound real-time workloads (like cyclictest) primarily exercise timer wakeups rather than complex I/O, the DomU can accurately maintain its temporal constraints utilizing hardware virtualization extensions alone. Therefore, manually elevating the priority of the Dom0 QEMU process is unnecessary for maintaining real-time determinism in contemporary Xen environments.
-
----
 Following the detailed analysis of each individual scenario, the table below provides a consolidated overview of the Worst-Case Execution Time (WCET) measurements. It allows for a direct comparison across all four Dom0-DomU kernel configurations (**NRT-NRT**, **NRT-RT**, **LL-NRT**, and **LL-RT**) under the four tested scheduling and load conditions: standard dynamic execution (**BASELINE**), execution under heavy system load within Dom0 (**STRESS WORKLOAD**), execution with static core isolation (**vCPU PINNING BASELINE**), and isolated execution under heavy load (**vCPU PINNING STRESS WORKLOAD**).
 
 | Configuration | NRT-NRT | NRT-RT | LL-NRT | LL-RT |
@@ -528,7 +515,45 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 * Average Increment: -1.11%
 * WCET Increment: +150.77%
 
----
+## ANALYSIS OF DEVICE MODEL PRIORITY INVERSION IN MODERN XEN
+
+In earlier research evaluating the real-time capabilities of hypervisors, a notable priority inversion issue was identified within the Xen architecture. The problem stems from the architectural dependency of Hardware Virtual Machine (HVM) guests on the Device Model. In Xen, when creating an HVM guest that requires a Device Model, this model is typically an instance of QEMU that executes as a standard process inside Domain 0 (Dom0). Because Dom0 is scheduled alongside other virtual machines by the hypervisor, a low-privilege QEMU process on Dom0 could be preempted when Dom0 is placed under heavy computational stress. Consequently, a Real-Time (RT) DomU waiting for the QEMU Device Model could suffer from unbounded latency, compromising its real-time execution guarantees.
+
+To investigate whether this architectural bottleneck persists in modern versions of Xen, a series of experiments were conducted. The objective is to determine if elevating the QEMU process to a maximum Real-Time priority (FIFO scheduler with priority 99) mitigates preemption and improves the latency bounds of the DomU compared to the default Xen configuration.
+
+To reproduce and analyze the aforementioned priority inversion on a modern Xen version, the environment was configured with strict resource partitioning.
+
+* **CPU Pinning**: Dom0 was pinned to the first 22 physical CPUs (pCPUs), while the Hardware Virtual Machine (HVM) DomU was pinned to the last 2 pCPUs.
+* **Host Stress**: To simulate heavy load and induce potential starvation in Dom0, stress-ng was executed with the following parameters:
+  ```bash
+  stress-ng --cpu 22 --vm 12 --vm-bytes 2G --timeout 10m
+  ```
+* **Kernel Configurations**: Tests were run across the usual four permutations of Dom0 and DomU kernels.
+* **QEMU Priority Mitigation**: For each kernel combination, a baseline test (default QEMU priority) was compared against a mitigated test (`maxprioqemu`), wherein the QEMU Device Model process in Dom0 was explicitly set to the `SCHED_FIFO` policy with a priority of 99.
+
+![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/xen_null_backgroundnoise_maxprioqemu.svg)
+
+![Performance under Stress - Static Pinning (Max QEMU Priority)](tests/plots/svg/Xen_under_Stress_MaxPrioQuemu_performance_null_boxplot.svg)
+
+### Empirical Results
+
+A thorough data analysis of the provided cyclictest histograms reveals the following key findings:
+
+* **Absence of Priority Inversion Spikes**: In older versions of Xen suffering from the QEMU starvation issue, the expected symptom would be a pronounced "heavy tail" in the histogram, indicating extreme, unbounded latencies where the DomU was blocked waiting for Dom0. The empirical data across all results_null_hvm_pinned_* logs demonstrates no such extreme outliers in the default priority configurations.
+* **Latency Distribution Parity**: The latency distributions between the default configurations and their mitigated counterparts are virtually identical.
+* **Consistent Upper Bounds**: The maximum recorded latencies (Worst-Case Execution Time) in the standard configurations are directly comparable to those in the maximum priority configurations. Across both the Low-Latency (LL) and Non-Real-Time (NRT) Dom0 environments, elevating QEMU's priority did not tighten the worst-case temporal bounds.
+
+Based on the experimental data, the priority inversion problem previously documented in Section 6.2 of the Abeni and Faggioli research seems to be non-existent in this modern Xen deployment. Changing the Device Model priority yields no beneficial effect for the latency bounds of real-time tasks inside the DomU.
+
+With further experiments, we confirmed that changing the priority of the QEMU process does not improve latency even when using the Credit2 scheduler.
+
+![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/xen_backgroundnoise_maxprioqemu.svg)
+
+![Performance under Stress - Credit2 Scheduler (Max QEMU Priority)](tests/plots/svg/Xen_under_Stress_MaxPrioQuemu_performance_credit2_boxplot.svg)
+
+This behavior indicates that modern Xen HVM implementations successfully decouple essential local timer and interrupt deliveries from the QEMU Device Model. Because CPU-bound real-time workloads (like cyclictest) primarily exercise timer wakeups rather than complex I/O, the DomU can accurately maintain its temporal constraints utilizing hardware virtualization extensions alone. Therefore, manually elevating the priority of the Dom0 QEMU process is unnecessary for maintaining real-time determinism in contemporary Xen environments.
+
+## IMPACT OF DIFFERENT STRESSORS ON LATENCIES
 
 Following the previous tests, it was decided to conduct a new case study: the latter aims to measure and compare the real-time latency perceived by an application workload running inside HVM virtual machines (DomU) on a Xen hypervisor, as four experimental factors vary:
 
@@ -656,7 +681,7 @@ The cache stressor produces the most extreme result of the entire study (88 over
 
 Comparing LL and NRT on the same unpinned guest/stressor combination, no kernel emerges as systematically better than the other. For example, on the nrt-hvm guest with cache stressor, LL reports 1 overflow (max 2.77 ms) against the 88 overflows of NRT (max 61.6 ms) --- a result clearly in favor of LL. But on the rt5-hvm guest with the same cache stressor, NRT is clean (0 overflows) while LL reports 19 overflows. This crossed pattern indicates that the kernel × guest × stressor interaction is more complex than a simple "the low-latency kernel always reduces latency", and that the benefit of the PREEMPT_RT kernel in this setup is, given the current state of the data, less decisive than vCPU pinning.
 
-## Summary of results
+### Final considerations
 
 * The factor that influences latency quality more than any other is **vCPU pinning**: almost zero overflows on all pinned configurations, regardless of kernel and stressor.
 * The **rt5-hvm** guest performs better than the **nrt-hvm** guest in every tested condition, pinning aside.
@@ -665,7 +690,7 @@ Comparing LL and NRT on the same unpinned guest/stressor combination, no kernel 
 * The **cache** stressor is the one that generates the greatest variability in results, including the absolute worst case of the study and all three isolated anomalies detected.
 ---
 
-## TACLe Benchmark
+## TACLe BENCHMARK
 
 This section of the documentation illustrates the rationale behind the selection of the benchmarks extracted from the **TACLeBench** version 1.9 suite and the methodology adopted for their execution within our architecture. The goal is to provide a heterogeneous workload to accurately validate execution latencies and performance stability in environments with strict real-time requirements.
 
@@ -927,7 +952,7 @@ To quickly evaluate system stability, the following table exclusively reports th
 
 Furthermore, alongside the WCET summary, this section now includes a detailed breakdown of the percentage increments for both the average latency (expressed as Mean $\pm$ Standard Deviation) and the maximum latency (WCET). This addition provides a precise quantitative analysis of the performance degradation induced by the heavy background noise within the control domain (Dom0) compared to the baseline execution for each individual benchmark.
 
-### DEBIE
+#### DEBIE
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | --- | --- | --- |
@@ -941,7 +966,7 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 ![TACLe benchmark - debie execution time on Xen](tests_TACLe/plots/Xen_TACLe_debie_boxplot.svg)
 
-### HUFFENC
+#### HUFFENC
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | --- | --- | --- |
@@ -955,7 +980,7 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 ![TACLe benchmark - huff_enc execution time on Xen](tests_TACLe/plots_nanosec/svg/xen_TACLe_huffenc_boxplot.svg)
 
-### LIFT
+#### LIFT
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | --- | --- | --- |
@@ -969,7 +994,7 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 ![TACLe benchmark - lift execution time on Xen](tests_TACLe/plots_nanosec/svg/xen_TACLe_lift_boxplot.svg)
 
-### MATRIX1
+#### MATRIX1
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | --- | --- | --- |
@@ -983,7 +1008,7 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 ![TACLe benchmark - matrix1 execution time on Xen](tests_TACLe/plots_nanosec/svg/xen_TACLe_matrix1_boxplot.svg)
 
-### TEST3
+#### TEST3
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | --- | --- | --- |
@@ -999,7 +1024,9 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 ---
 
-As previously mentioned, following the tests conducted, new studies have been added: the latter compares the temporal behavior (execution latency) of five benchmarks from the TACLe suite --- debie, huff_enc, lift, matrix1, test3 --- executed inside an HVM DomU on Xen, a Type 1 hypervisor, under two configurations of the low-latency Dom0 kernel ("LL", Linux 6.18.35-rt5-ll): without vCPU pinning and with pinning. The goal is to understand whether and to what extent pinning improves the temporal predictability of the system, and if it introduces non-obvious side effects.
+### TACLeBench with stress on Dom0
+
+As previously mentioned, following the tests conducted, new studies have been added: the latter compares the temporal behavior (execution latency) of five benchmarks from the TACLe suite --- debie, huff_enc, lift, matrix1, test3 --- executed inside an HVM DomU on Xen, a Type 1 hypervisor, under two configurations of the low-latency Dom0 kernel ("LL", Linux 6.18.35-rt5-ll): without vCPU pinning and with pinning. The goal is to understand to what extent stress on Dom0 actually matters to the performance of a DomU, comparing it to the effects another noisy DomU had.
 
 Data collection was automated with the provided bash script, which orchestrates the entire end-to-end experiment:
 
@@ -1011,7 +1038,7 @@ Data collection was automated with the provided bash script, which orchestrates 
 
 **Methodological note**: the 10 provided files are execution time histograms of the TACLe benchmarks themselves (not of cyclictest, which is the workload shown in the script). The file names do not report which sequential stressor scenario was active during capture --- this is information to be retrieved in order to confidently attribute the observed differences solely to pinning and not to a mix of different conditions between the two runs.
 
-### Statistics extracted per file
+#### Statistics extracted per file
 
 | **Benchmark** | **Config** | **Min (µs)** | **Media (µs)** | **p99 (µs)** | **Massimo (µs)** | **Overflow** |
 |---------------|------------|--------------|----------------|--------------|------------------|--------------|
@@ -1046,11 +1073,11 @@ The following graph summarizes, for each benchmark, the percentage variation of 
 
 ---
 
-### 1- Pinning systematically improves typical latency
+#### 1- Pinning systematically improves typical latency
 
 Across all five benchmarks, without exception, vCPU pinning reduces both the mean latency (from -15% to -46%) and the p99 (from -27% to -37%). This confirms the expected effect: fixing the DomU vCPUs to dedicated physical cores eliminates the variability introduced by the Dom0 scheduler and inter-core migrations, making the temporal behavior more predictable in the typical case.
 
-### 2- Tail anomaly: pinning worsening the worst case
+#### 2- Tail anomaly: pinning worsening the worst case
 
 On debie, matrix1, and test3, pinning also improves the worst-case (lower maximum). But on lift and huff_enc the opposite happens: the maximum latency increases drastically (+326% on lift, +143% on huff_enc), and huff_enc-pinned registers a histogram overflow, a sign that at least one sample exceeded even the maximum expected bucket --- the actual peak could therefore be even higher than reported.
 
@@ -1062,7 +1089,7 @@ This is the most significant result to document: pinning is not a unilateral gua
 
 ![TACLe benchmark - test3 stress dom0](tests_tacle_dom0_stress/plots/stressor_TACLe_test3_boxplot.svg)
 
-### 3- Consistency between scale and behavior
+#### 3- Consistency between scale and behavior
 
 The order of magnitude of latency varies greatly between benchmarks (from hundreds of nanoseconds for matrix1 to tens of milliseconds for debie), reflecting the different computational complexity of the TACLe workloads. The mean/p99 improvement pattern with pinning is maintained regardless of the scale, which reinforces the idea that it is a structural effect of pinning itself and not an artifact linked to the duration of the single benchmark.
 
@@ -1071,7 +1098,8 @@ The order of magnitude of latency varies greatly between benchmarks (from hundre
 ![TACLe benchmark - huff_enc stress dom0](tests_tacle_dom0_stress/plots/stressor_TACLe_huffenc_boxplot.svg)
 
 ---
-## PV and PVH DomUs
+
+## PV AND PVH DOMUS
 
 In their previous work, Abeni and Faggioli concluded that in Xen, virtualization technology played a major role in scheduling latencies due to a priority inversion bug in how the Device Model operated. Specifically, they noted that the QEMU process acting as the DomU DM did not execute with high priority, allowing it to be preempted by the workload.
 
@@ -1085,7 +1113,7 @@ While configuring the PV guest, we encountered the same issue observed during th
 
 ![Comparing HVM, PV and PVH guests - Credit2 Scheduler (No Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_nonoise.svg)
 
-### LOW LATENCY KERNEL AND LOW LATENCY VM (PV DomU)
+### LOW LATENCY DOM0 AND LOW LATENCY DOMU (PV DomU)
 
 This section analyzes the results obtained from a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, explicitly assessing a Paravirtualized (PV) guest. The configuration features a "Low Latency" kernel deployed on both the privileged domain (Dom0) and the unprivileged user domain (DomU). This test evaluates the baseline performance of the dynamic scheduler without static vCPU pinning and without any artificial stress workload applied to Dom0.
 
@@ -1101,7 +1129,7 @@ The empirical data collected from this test yields the following observations re
 *   **Bounded WCET:** The maximum latency was contained at 525 µs.
 *   **Baseline Jitter:** The average latency of 37 µs confirms the presence of scheduling jitter.
 
-### LOW LATENCY KERNEL AND REAL-TIME VM (PVH DomU)
+### LOW LATENCY DOM0 AND REAL-TIME DOMU (PVH DomU)
  
 This section analyzes the results obtained from a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, explicitly assessing a PVH guest. The configuration features a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). This test evaluates the baseline performance of the dynamic Credit2 scheduler without static vCPU pinning and without any artificial stress workload applied to Dom0.
  
@@ -1119,7 +1147,7 @@ The empirical data collected from this test yields the following observations re
 
 ![Comparing HVM, PV and PVH guests - Credit2 Scheduler (No Noise)](tests/plots/svg/Comparing_HVM_PV_PVH_credit2_boxplot.svg)
 
-## Impact of the Stress Workload on Different Virtualization Technologies
+## IMPACT OF THE STRESS WORKLOAD ON DIFFERENT VIRTUALIZATION TECHNOLOGIES
 
 To assess the influence of the underlying virtualization architecture on system determinism, this phase of testing introduces a background stress workload in the privileged domain (Dom0) while executing the `cyclictest` probe within PV and PVH guests. Building upon our earlier findings—which demonstrated that modern Hardware Virtual Machine (HVM) configurations successfully manage latency bounds without suffering from historical QEMU-induced preemption anomalies—this evaluation aims to compare how alternative virtualization models respond to resource contention. Ultimately, the analysis highlights that while PVH and HVM achieve highly similar performance levels, the PV architecture exhibits the worst performance among all three technologies.
 
@@ -1133,7 +1161,7 @@ In this section, we present a detailed comparative analysis of these configurati
 
 ![Comparing HVM, PV and PVH guests - Credit2 Scheduler (Background Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_backgroundnoise.svg)
 
-### LOW LATENCY KERNEL AND LOW LATENCY VM (PV DomU)
+### LOW LATENCY DOM0 AND LOW LATENCY DOMU (PV DomU)
 
 This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, specifically evaluating a Paravirtualized (PV) guest. This configuration features a "Low Latency" kernel deployed on both the privileged domain (Dom0) and the unprivileged user domain (DomU). Crucially, this test was conducted without static vCPU pinning and while Dom0 was subjected to a significant background stress workload (`stressdom0`). The objective is to evaluate the latency characteristics and the impact of host-level contention when both domains utilize low-latency optimizations in an unpinned PV environment.
 
@@ -1149,7 +1177,7 @@ The empirical data collected from this sustained test yields the following obser
 *   **Bounded WCET:** The maximum latency was contained at 312 µs, indicating that the dual Low-Latency kernel setup provides a degree of stability under stress, preventing extreme multi-millisecond spikes despite the lack of pinning.
 *   **Stress-Induced Jitter:** The average latency of 40 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This highlights the impact of dynamic hypervisor scheduling and resource contention from the `stressdom0` workload on a PV guest.
 
-### LOW LATENCY KERNEL AND REAL-TIME VM (PVH DomU)
+### LOW LATENCY DOM0 AND REAL-TIME DOMU (PVH DomU)
  
 This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, explicitly assessing a PVH guest. The configuration features a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). Crucially, this test was conducted without static vCPU pinning and while Dom0 was subjected to a significant background stress workload. The objective is to evaluate the latency characteristics and virtualization overhead introduced by the hypervisor when managing a PVH guest under these specific, unpinned stress conditions.
  
@@ -1167,7 +1195,7 @@ The empirical data collected from this sustained test yields the following obser
 
 ![Comparing HVM, PV and PVH guests - Credit2 Scheduler (Background Noise)](tests/plots/svg/Comparing_HVM_PV_PVH_stressdom0_credit2_boxplot.svg)
 
-## Comparative Analysis of PV and PVH Architectures under Static Allocation
+## COMPARATIVE ANALYSIS OF PV AND PVH ARCHITECTURES UNDER STATIC ALLOCATION
 
 Following the initial investigations into dynamic scheduling behavior, this section presents a targeted comparative analysis of execution latencies between Paravirtualized (PV) and Hardware Virtual Machine with PV drivers (PVH) configurations. To eliminate the jitter introduced by complex fair-share algorithms and evaluate the highest degree of determinism achievable, these tests employ strict vCPU-to-pCPU pinning across both the privileged domain (Dom0) and the unprivileged user domain (DomU), effectively emulating the deterministic behavior of an offline NULL scheduler.
 
@@ -1178,7 +1206,7 @@ This comparative approach aims to quantify the efficacy of strict hardware isola
 ![Comparing HVM, PV and PVH guests - Null Scheduler (No Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_null_nonoise.svg)
 
 
-### LOW LATENCY KERNEL AND LOW LATENCY VM  (PV DomU)
+### LOW LATENCY DOM0 AND LOW LATENCY DOMU (PV DomU)
 
 This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, specifically evaluating a Paravirtualized (PV) guest. The configuration utilizes a "Low Latency" kernel for both the privileged domain (Dom0) and the unprivileged user domain (DomU). Crucially, this test evaluates the system emulating the static NULL scheduler with explicit vCPU pinning, and it is conducted in a quiet environment without any background `stressdom0` workload. The objective is to assess the baseline latency and determinism of a PV guest when fully optimized through static hardware allocation.
 
@@ -1194,7 +1222,7 @@ The empirical data collected from this sustained test yields the following obser
 *   **Bounded WCET:** The maximum latency was contained at 492 µs. While higher than fully patched RT configurations, this demonstrates a stable upper bound for a PV guest utilizing Low Latency kernels in a pinned environment.
 *   **Baseline Jitter:** The average latency of 39 µs indicates that the static allocation provided by the NULL scheduler does not completely eliminate the inherent scheduling jitter associated with the virtualization layer itself.
 
-### LOW LATENCY KERNEL AND REAL TIME VM (PVH DomU)
+### LOW LATENCY DOM0 AND REAL TIME DOMU (PVH DomU)
 
 This section details the analysis of a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, specifically evaluating a PVH guest. The configuration utilizes a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). This test evaluates the system emulating the static NULL scheduler with explicit vCPU pinning, and it is conducted in a quiet environment without any background stress workload. The objective is to assess the baseline latency and determinism of a highly optimized PVH guest when fully isolated through static hardware allocation.
 
@@ -1212,7 +1240,7 @@ The empirical data collected from this sustained test yields the following obser
 
 ![Comparing HVM, PV and PVH guests - Null Scheduler (No Noise)](tests/plots/svg/Comparing_HVM_PV_PVH_null_boxplot.svg)
 
-## Impact of the Stress Workload on PV and PVH Architectures under Static Allocation
+## IMPACT OF THE STRESS WORKLOAD ON PV AND PVH ARCHITECTURES UNDER STATIC ALLOCATION
 
 Building upon the baseline established in the ideal, unstressed environment, this phase introduces a severe background stress workload (`stressdom0`) into the privileged control domain. The primary objective is to evaluate the resilience of static vCPU pinning—acting as a surrogate for the offline NULL scheduler—when the host system is heavily saturated with competing processes.
 
@@ -1222,7 +1250,7 @@ The subsequent analyses reveal a distinct divergence in architectural resilience
 
 ![Comparing HVM, PV and PVH guests - Null Scheduler (Background Noise)](tests_pv_pvh/plots/svg/xen_guesttypecompare_null_backgroundnoise.svg)
 
-### LOW LATENCY KERNEL AND LOW LATENCY VM (PV DomU)
+### LOW LATENCY DOM0 AND LOW LATENCY DOMU (PV DomU)
 
 This section analyzes the results obtained from a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, explicitly assessing a Paravirtualized (PV) guest. The configuration features a "Low Latency" kernel deployed on both the privileged domain (Dom0) and the unprivileged user domain (DomU). Crucially, this test evaluates the performance of the NULL scheduler with explicit vCPU pinning while Dom0 is subjected to a significant background stress workload (`stressdom0`). The objective is to evaluate the latency characteristics and the ability of the NULL scheduler's static allocation to manage host-level contention in an optimized, pinned PV environment.
 
@@ -1238,7 +1266,7 @@ The empirical data collected from this sustained test yields the following obser
 *   **Bounded WCET:** The maximum latency was contained at 285 µs. This indicates that the combination of the dual Low-Latency kernel setup and the pinned NULL scheduler provides a degree of stability under stress, establishing a tighter bound than unpinned configurations.
 *   **Stress-Induced Jitter:** The average latency of 39 µs and the wide spread of nominal execution times confirm the presence of significant scheduling jitter. This highlights that even with a statically pinned scheduler, resource contention from the `stressdom0` workload on a PV guest still significantly impacts latency stability.
 
-### LOW LATENCY KERNEL AND REAL-TIME VM (PVH DomU)
+### LOW LATENCY DOM0 AND REAL-TIME DOMU (PVH DomU)
 
 This section analyzes the results obtained from a 5-minute execution of the `cyclictest` utility within a Xen virtualized environment, evaluating a Hardware Virtual Machine with Paravirtualized drivers (PVH) guest. The configuration features a "Low Latency" kernel deployed on the privileged domain (Dom0) and a Real-Time (`PREEMPT_RT`) kernel on the unprivileged user domain (DomU). Crucially, this test evaluates the performance of the NULL scheduler with explicit vCPU pinning while Dom0 is subjected to a background stress workload (`stressdom0`). The objective is to evaluate the latency characteristics and the ability of the NULL scheduler's static allocation to maintain determinism under host-level contention in an optimized, pinned PVH environment.
 
@@ -1256,7 +1284,7 @@ The empirical data collected from this sustained test yields the following obser
 
 ![Comparing HVM, PV and PVH guests - Null Scheduler (Background Noise)](tests/plots/svg/Comparing_HVM_PV_PVH_stressdom0_null_boxplot.svg)
 
----
+## SUMMARY OF RESULTS (PV AND PVH)
 
 To synthesize the findings from our latency evaluations, the following table aggregates the Worst-Case Execution Time (WCET) results recorded across the three evaluated Xen virtualization modes: Hardware Virtual Machine (HVM), Hardware Virtual Machine with Paravirtualized drivers (PVH), and fully Paravirtualized (PV) guests. 
 
