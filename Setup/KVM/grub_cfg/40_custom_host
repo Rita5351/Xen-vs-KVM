@@ -1,0 +1,26 @@
+#!/bin/sh
+exec tail -n +3 $0
+# This file provides an easy way to add custom menu entries.  Simply type the
+# menu entries you want to add after this comment.  Be careful not to change
+# the 'exec tail' line above.
+
+menuentry 'Ubuntu 24.04 (6.18.35 isolated)'{
+        echo 'Loading Linux 6.18.35 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on [22, 23]'
+        linux   /boot/vmlinuz-6.18.35 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=22-23 isolcpus=22-23 rcu_nocbs=22-23 irqaffinity=0-21 quiet splash $vt_handoff
+        echo    'Loading initial ramdisk ...'
+        initrd  /boot/initrd.img-6.18.35
+}
+
+menuentry 'Ubuntu 24.04 (6.18.35-rt5 isolated)'{
+	echo 'Loading Linux 6.18.35-rt5 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on [22, 23]'
+	linux	/boot/vmlinuz-6.18.35-rt5 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=22-23 isolcpus=22-23 rcu_nocbs=22-23 irqaffinity=0-21 quiet splash $vt_handoff
+	echo	'Loading initial ramdisk ...'
+	initrd	/boot/initrd.img-6.18.35-rt5
+}
+
+menuentry 'Ubuntu 24.04 (6.18.35-rt5 TACLe)'{
+        echo 'Loading Linux 6.18.35-rt5 with NO_HZ, RCU_NOCBS and no IRQ_AFFINITY on [4, 23]'
+        linux   /boot/vmlinuz-6.18.35-rt5 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=4-23 rcu_nocbs=4-23 irqaffinity=0-3 quiet splash $vt_handoff
+        echo    'Loading initial ramdisk ...'
+        initrd  /boot/initrd.img-6.18.35-rt5
+}

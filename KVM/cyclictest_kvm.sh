@@ -24,7 +24,7 @@ GUEST_USER="matt"
 GUEST_PASS="YOUR_GUEST_PASSWORD"
 
 # Local directory where results are collected on the orchestrator
-RESULTS_DIR="./results_kvm"
+RESULTS_DIR="./results"
 
 # Seconds to wait inside the guest after login before starting cyclictest
 GUEST_PREWARM_TIME=15

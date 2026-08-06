@@ -3,7 +3,7 @@ This chapter outlines the complete experimental testbed configuration required t
 
 The following sections detail the step-by-step preparation of the system, starting with the installation and tuning of the host operating system, the compilation of a fully preemptible Linux kernel (`PREEMPT_RT`), and the deployment of the respective hypervisors. We then detail both hypervisors' configuration, focusing on the differences between the two.
 
-## Kernel configuration
+## Kernel configuration and real-time tuning
 
 To establish a baseline for our performance comparison, we also required the standard, non-real-time Linux kernel version 6.18.35. 
 
@@ -15,7 +15,7 @@ To establish a baseline for our performance comparison, we also required the sta
 
 * Next, we installed the necessary dependencies to build the kernel:
   ```bash
-  sudo apt install libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf llvm qtcreator qtbase5-dev qt5-qmake cmake
+  sudo apt -y install libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf llvm qtcreator qtbase5-dev qt5-qmake cmake
   ```
 
 * We navigated into the Linux build tree and copied the configuration file from the currently running system:
@@ -110,7 +110,7 @@ The isolation was implemented at the operating system level through various tech
 
 The isolation was applied to both the host and the virtualized environment. The host system was configured to avoid scheduling tasks on the physical CPUs dedicated to running the virtual machines. Concurrently, the guest system was also configured so that the virtual machine's scheduler could not assign tasks to the cores reserved for real-time applications.
 
-On the host, we fully isolated **CPU22** and **CPU23** on our 24-core system, configuring GRUB by adding a custom boot entry in `/etc/grub.d/40_custom`:
+The following is an example of OS-level isolation we adopted in one of the KVM experiments. On the host, we fully isolated **CPU22** and **CPU23** on our 24-core system, configuring GRUB by adding a custom boot entry in `/etc/grub.d/40_custom`:
 
 ```text
 menuentry 'Ubuntu 24.04 (6.18.35-rt5-full)'{
@@ -119,7 +119,7 @@ menuentry 'Ubuntu 24.04 (6.18.35-rt5-full)'{
         echo    'Loading initial ramdisk ...'
         initrd  /boot/initrd.img-6.18.35-rt5
 }
- ```
+```
 
 Similarly, on the guest we isolated **CPU1** with the following configuration:
 
@@ -130,180 +130,111 @@ menuentry 'Ubuntu 24.04 (6.18.35-rt5-full)'{
         echo    'Loading initial ramdisk ...'
         initrd  /boot/initrd.img-6.18.35-rt5
 }
- ```
+```
 
 
 ## KVM
 Being effectively treated as a Type-2 hypervisor, KVM sits on top of an already booted operating system. The host OS manages it similarly to a user-space application, where the virtual CPUs (vCPUs) are scheduled as standard host processes. Consequently, the installation process is as straightforward as running the following command:
 
 ```bash
-sudo apt -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu-system qemu-kvm virt-manager
+sudo apt -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu-system qemu-kvm virt-manager numad
 ```
 
 We installed QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.17)
 
-Once the installation was complete, we provisioned the guest Virtual Machine with the following hardware specifications:
+In order to apply the OS-level isolation techniques on the pinned configuration, we modified the `/etc/grub.d/40_custom` file adding the entries in the [GRUB host configuration](KVM/grub_cfg/40_custom_host).
 
-* **vCPUs:** 2
-* **RAM:** 4 GB
-* **Storage:** 25 GB virtual hard disk
+Once the installation was complete, we provisioned the following guest Virtual Machines with the same hardware specifications:
 
-We installed both the 6.18.35 and the 6.18.35-rt5 kernels in the same manner as on the host, with the exception that we did not enable the NVMe block device support, since we will be using VirtIO.
+| Name | ubuntu24.04 | ubuntu24.04-pinned |
+|---|---|---|
+| **vCPUs:** | 2 | 2 |
+| **RAM:** | 4 GB | 4 GB |
+| **Isolation techniques** | Memory locking, CPU pass-through | CPU pinning, memory locking, CPU pass-through, OS-level isolation |
+| **Configuration file** | [ubuntu24.04.xml](KVM/vms/ubuntu24.04.xml) | [ubuntu24.04-pinned.xml](KVM/vms/ubuntu24.04-pinned.xml) |
 
-We ensured the VM always had the required resources avaiable and could not be preempted by other tasks by setting the QEMU scheduling mode to `SCHED_FIFO` with priority 99.
-```bash
-pgrep qemu
-sudo chrt -f -a -p 99 [PID]
+We installed both the 6.18.35 and the 6.18.35-rt5 kernels in the same manner as on the host, with the exception that we did not enable the NVMe block device support, since we will be using VirtIO. For simplicity reasons, the two VMs share the same virtual drive.
+
+In order to apply the OS-level isolation techniques on the pinned configuration, we modified the `/etc/grub.d/40_custom` file adding the entries in the [GRUB guest configuration](KVM/grub_cfg/40_custom_guest).
+
+We ensured the VM vCPUs always had the required resources available and could not be preempted by other tasks by setting the `vcpusched` mode of both vCPUs to `SCHED_FIFO` with priority 98.
+
+```xml
+<vcpusched vcpus='0' scheduler='fifo' priority='98'/>
+<vcpusched vcpus='1' scheduler='fifo' priority='98'/>
 ```
 
-### Isolating the VM
-While applying the aforementioned isolation technique, we appended specific parameters to the XML configuration to ensure stable and predictable VM behaviour:
+We enabled memory locking to prevent swapping:
 
-1. We applied CPU pinning to make the vCPU threads only run on the isolated cores, while banishing emulator and I/O threads to the general-purpose cores:
-
-   ```xml
-    <vcpu placement='static'>2</vcpu>
-    <cputune>
-      <vcpupin vcpu='0' cpuset='22'/>
-      <vcpupin vcpu='1' cpuset='23'/> 
-      <emulatorpin cpuset='0-21'/>
-      <iothreadpin iothread='1' cpuset='0-21'/>
-    </cputune>
-   ```
-
-2. We enabled memory locking to prevent swapping:
-   ```xml
-    <memoryBacking>
-      <locked/>
-    </memoryBacking>
-   ```
-
-3. We ensured CPU pass-through and correct topology mapping:
-   ```xml
-    <cpu mode='host-passthrough' check='none'>
-      <topology sockets='1' dies='1' cores='2' threads='1'/>
-    </cpu>
-   ```
-
-### 1. Implementation of the Control and Test Script
-
-The Bash script invokes `cyclictest` for a 5-minute duration, redirects the results to a log file, and disables the service upon completion to prevent execution on subsequent normal boots.
-
-#### Step 1.1: Script creation
-Create a new executable file in the system path dedicated to local scripts:
-
-```bash
-sudo nano /usr/local/bin/run_cyclictest.sh
+```xml
+<memoryBacking>
+  <locked/>
+</memoryBacking>
 ```
 
-#### Step 1.2: Script code (`run_cyclictest.sh`)
-Paste the following code inside the file:
+We ensured CPU pass-through and correct topology mapping:
 
-```bash
-#!/bin/bash
-
-# Paths configuration
-LOG_DIR="/var/log/cyclictest_results"
-
-# Ensure the log directory exists
-mkdir -p "$LOG_DIR"
-
-# Wait for system to fully settle before starting the test
-sleep 30
-
-# Execute cyclictest with Real-Time priority for 5 minutes
-sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile="$LOG_DIR/results_hist.log"
-
-# Termination condition: remove the service to prevent running on future reboots
-systemctl disable cyclictest-autorun.service
+```xml
+<cpu mode='host-passthrough' check='none'>
+  <topology sockets='1' dies='1' cores='2' threads='1'/>
+</cpu>
 ```
 
-#### Step 1.3: Assign execution permissions
-Configure the correct POSIX permissions to allow systemd to invoke the script:
+In the pinned configuration, we applied CPU pinning to make the vCPU threads run exactly on the isolated cores:
+
+```xml
+<vcpu placement='static'>2</vcpu>
+<cputune>
+  <vcpupin vcpu='0' cpuset='22'/>
+  <vcpupin vcpu='1' cpuset='23'/> 
+  <emulatorpin cpuset='0-21'/>
+  <iothreadpin iothread='1' cpuset='0-21'/>
+</cputune>
+```
+
+### TACLe Benchmark
+
+We provisioned the following guest Virtual Machines to run the TACLe benchmarks:
+
+| Name | ubuntu24.04-tacle | ubuntu24.04-tacle-pinned |
+|---|---|---|
+| **vCPUs:** | 2 | 2 |
+| **RAM:** | 4 GB | 4 GB |
+| **Isolation techniques** | Memory locking, CPU pass-through | CPU pinning, memory locking, CPU pass-through, OS-level isolation |
+| **Configuration file** | [ubuntu24.04-tacle.xml](KVM/vms/ubuntu24.04-tacle.xml) | [ubuntu24.04-tacle-pinned.xml](KVM/vms/ubuntu24.04-tacle-pinned.xml) |
+
+We configured them the same way we did for the `ubuntu24.04` and `ubuntu24.04-pinned` VMs respectively, with the exception of the pinning layout of the emulation and I/O threads. These four also share the same virtual drive, since only one of them will be turned on at a time.
+
+For the noisy guests, we provisioned similar VMs, but with different specs and no real-time vCPU priority assigned:
+
+| Name | ubuntu24.04-noise-small | ubuntu24.04-noise-big | ubuntu24.04-noise-big-pinned |
+|---|---|---|---|
+| **vCPUs:** | 2 | 16 | 16 |
+| **RAM:** | 4 GB | 16 GB | 16 GB |
+| **Isolation techniques** | Memory locking, CPU pass-through | Memory locking, CPU pass-through | CPU pinning, memory locking, CPU pass-through |
+| **Configuration file** | [ubuntu24.04-noise-small.xml](KVM/vms/ubuntu24.04-noise-small.xml) | [ubuntu24.04-noise-big.xml](KVM/vms/ubuntu24.04-noise-big.xml) | [ubuntu24.04-noise-big-pinned.xml](KVM/vms/ubuntu24.04-noise-big-pinned.xml) |
+
+These three also share a different virtual drive, that does not require any modification but the installation of `stress-ng`:
 
 ```bash
-sudo chmod +x /usr/local/bin/run_cyclictest.sh
+sudo apt -y install stress-ng
 ```
-
----
-
-### 2. Configuration of the Systemd Unit Service
-
-To ensure the script is executed immediately after the boot phase and in a non-interactive context, a `oneshot` type systemd service is implemented.
-
-#### Step 2.1: Unit file creation
-Create the service descriptor within the system units directory:
-
-```bash
-sudo nano /etc/systemd/system/cyclictest-autorun.service
-```
-
-#### Step 2.2: Service structure (`cyclictest-autorun.service`)
-Configure the unit with the following directives:
-
-```ini
-[Unit]
-Description=Cyclictest Automation 5-Min Run
-After=network.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/run_cyclictest.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-```
-
----
-
-### 3. Enabling and Executing the Flow
-
-Once the components are defined, it is necessary to notify the service manager of the changes and enable the automatic startup of the test.
-
-#### Step 3.1: Reload the systemd daemon
-```bash
-sudo systemctl daemon-reload
-```
-
-#### Step 3.2: Enable the service at boot
-```bash
-sudo systemctl enable cyclictest-autorun.service
-```
-
-#### Step 3.3: Triggering the test
-To start the automated 5-minute test, perform a manual reboot of the KVM virtual machine:
-
-```bash
-sudo reboot
-```
-
-After the system boots, it will wait 30 seconds and then run the test for exactly 5 minutes. At the end of the process, the results will be available in `/var/log/cyclictest_results/results_hist.log`, the service will automatically disable itself, and the system will remain stably booted on the set kernel.
 
 ## Xen
 
-### Installation and GUI Troubleshooting
-
 We installed the Xen hypervisor 4.17.3 via the `xen-hypervisor-amd64` package. This process automatically generated the necessary GRUB bootloader entries to boot the Ubuntu system as **Dom0** (the privileged management domain). 
 
-During our initial boot tests, we encountered severe instability with the Graphical User Interface (GUI). Specifically, the `nouveau` open-source drivers—often relied upon for NVIDIA GPU compatibility—failed to initialize correctly on our testbed. Further investigation suggested that graphical drivers generally exhibit poor stability when running under Xen Dom0, a behavior observed across different hardware configurations. 
-
-To bypass this limitation, we opted for a headless setup and managed the host via SSH. We installed the SSH daemon:
-
 ```bash
-sudo apt install openssh-server
+sudo apt -y install xen-hypervisor-amd64
 ```
 
-After modifying the configuration file to accept incoming connections from the local network, we rebooted into the Xen environment and successfully established a remote SSH session. We verified that the hypervisor was functioning correctly by checking its status:
+During our initial boot tests, we encountered severe instability with the Graphical User Interface (GUI). Specifically, the `nouveau` open-source drivers—often relied upon for NVIDIA GPU compatibility—failed to initialize correctly on our testbed. Further investigation suggested that graphical drivers generally exhibit poor stability when running under Xen Dom0, a behavior observed across different hardware configurations. To bypass this limitation, we opted for a headless setup and managed the host via SSH.
+
+To streamline the provisioning of subsequent DomUs, we installed the `xen-tools` package:
 
 ```bash
-sudo xl info
+sudo apt -y install xen-tools
 ```
-The output successfully confirmed the Xen hypervisor was active and managing the host.
-
-### Storage Provisioning and Tooling
-
-To streamline the provisioning of subsequent **DomU** (guest) virtual machines, we installed the `xen-tools` package. 
 
 Since our guests required dedicated block storage, we resized the existing LVM (Logical Volume Manager) partition hosting the Ubuntu installation to carve out a new logical volume exclusively dedicated to the VMs. We performed this using the following steps:
 
@@ -320,48 +251,15 @@ sudo e2fsck -f /dev/ubuntu-vg/ubuntu-24.04-domU
 sudo tune2fs -U random /dev/ubuntu-vg/ubuntu-24.04-domU
 ```
 
-### DomU Configuration and Deployment
+We designed different configuration files to provision our DomU instances, with the same hardware specifications. The differences between the configurations are the underlying kernel used to boot them and how vCPU allocation is performed.
 
-We designed two distinct configuration files to provision our DomU instances. These guests are configured with the exact same hardware specifications (vCPUs, RAM, Storage) as the KVM virtual machines to guarantee a fair comparison. The only difference between the two configurations is the underlying kernel used to boot them.
+| Name | ubuntu-24.04-linux-6.18.35-nrt-hvm | ubuntu-24.04-linux-6.18.35-nrt-hvm-pinned | ubuntu-24.04-linux-6.18.35-rt5-hvm | ubuntu-24.04-linux-6.18.35-rt5-hvm-pinned |
+|---|---|---|---|---|
+| **vCPUs:** | 2 | 2 | 2 | 2 |
+| **RAM:** | 4 GB | 4 GB | 4 GB | 4 GB |
+| **Isolation techniques** | None | CPU pinning | None | CPU pinning |
+| **Configuration file** | [ubuntu-24.04-linux-6.18.35-nrt-hvm.conf](Xen/domains/ubuntu-24.04-linux-6.18.35-nrt-hvm.conf) | [ubuntu-24.04-linux-6.18.35-nrt-hvm-pinned.conf](Xen/domains/ubuntu-24.04-linux-6.18.35-nrt-hvm-pinned.conf) | [ubuntu-24.04-linux-6.18.35-rt5-hvm.conf](Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-hvm.conf) | [ubuntu-24.04-linux-6.18.35-rt5-hvm-pinned.conf](Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-hvm-pinned.conf) |
 
-The base configuration file is structured as follows:
-
-```conf
-# This configures either a HVM, a PVH or a PV guest
-type = "hvm"
-
-# Guest name
-name = "ubuntu-24.04-linux-6.18.35-rt5"
-
-# Kernel image to boot
-kernel = "/boot/vmlinuz-6.18.35-rt5"
-
-# Ramdisk (optional)
-ramdisk = "/boot/initrd.img-6.18.35-rt5"
-
-# Kernel command line options (to show output on console)
-extra = "root=/dev/xvda console=hvc0"
-
-# Initial memory allocation (4GB)
-memory = 4096
-maxmem = 4096
-
-# Number of VCPUS (2)
-vcpus = 2
-maxvcpus = 2
-
-# Network devices
-vif = [ 'bridge=xenbr0' ]
-
-# Disk Devices
-disk = [ '/dev/ubuntu-vg/ubuntu-24.04-domU,raw,xvda,rw' ]
-```
-
-Finally, we instantiated the virtual machine by passing the configuration file to the Xen toolstack:
-
-```bash
-sudo xl create -c ubuntu-24.04-linux-6.18.35-rt5-hvm.conf
-```
 ### Problems with PREEMPT_RT
 
 During the initial setup phase, we attempted to boot Xen using the same real-time kernel—compiled with the previously described instructions—as the Dom0 kernel. We tested various kernel versions across different Linux distributions and experimented with several combinations of the tuning parameters mentioned earlier (specifically: `CONFIG_SCHED_MC_PRIO`, `CONFIG_CPU_FREQ`, `CONFIG_STACKPROTECTOR`, `CONFIG_APM`, `CONFIG_ACPI_PROCESSOR`, and `CONFIG_CPU_IDLE`). 
@@ -387,77 +285,9 @@ Consequently, we decided to leave the "Fully Preemptible Kernel" option disabled
 
 ### Resource partitioning and NULL-scheduler
 
-In order to compare the effects of the scheduler choice on Xen, we swapped the default Credit2 scheduler with a pinned configuration, effectively using an offline scheduler (the NULL-scheduler). This is done to assess the current effects of the issues identified by the previous analyses of Abeni and Faggioli, such as the priority inversion via QEMU and the `TIMER_SLOP` limitation. In order to do so, we changed the Xen boot configuration to use only the first 22 pCPUs for Dom0:
+In order to compare the effects of the scheduler choice on Xen, we swapped the default Credit2 scheduler with a pinned configuration, effectively using an offline scheduler. This is done to assess the current effects of the issues identified by the previous analyses of Abeni and Faggioli, such as the priority inversion via QEMU and the `TIMER_SLOP` limitation. In order to do so, we changed the Dom0 GRUB boot configuration at `/etc/grub.d/40_custom` adding the entries shown in [this GRUB configuration file](Xen/grub_cfg/40_custom).
 
-```text
-menuentry 'Ubuntu GNU/Linux, with Xen 4.17-amd64 and Linux 6.18.35, null-sched and CPU pinning on 0-21' --class ubuntu --class gnu-linux --class gnu --class os --class xen {
-        insmod part_gpt
-        insmod ext2
-        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
-        echo    'Loading Xen 4.17-amd64 ...'
-        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
-            xen_rm_opts=
-        else
-            xen_rm_opts="no-real-mode edd=off"
-        fi
-        multiboot2      /xen-4.17-amd64.gz sched=null dom0_max_vcpus=22 dom0_vcpus_pin ${xen_rm_opts}
-        echo    'Loading Linux 6.18.35 ...'
-        module2 /vmlinuz-6.18.35 placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
-        echo    'Loading initial ramdisk ...'
-        module2 --nounzip   /initrd.img-6.18.35
-}
-
-menuentry 'Ubuntu GNU/Linux, with Xen 4.17-amd64 and Linux 6.18.35-rt5-ll, null-sched and CPU pinning on 0-21' --class ubuntu --class gnu-linux --class gnu --class os --class xen $menuentry_id_option 'xen-gnulinux-6.18.35-rt5-ll-advanced-0ae49e56-7bb9-4525-8d68-3684c45c63da' {
-        insmod part_gpt
-        insmod ext2
-        search --no-floppy --fs-uuid --set=root c24cd478-6ada-412b-8700-507322c2f8a8
-        echo    'Loading Xen 4.17-amd64 ...'
-        if [ "$grub_platform" = "pc" -o "$grub_platform" = "" ]; then
-            xen_rm_opts=
-        else
-            xen_rm_opts="no-real-mode edd=off"
-        fi
-        multiboot2      /xen-4.17-amd64.gz sched=null dom0_max_vcpus=22 dom0_vcpus_pin ${xen_rm_opts}
-        echo    'Loading Linux 6.18.35-rt5-ll ...'
-        module2 /vmlinuz-6.18.35-rt5-ll placeholder root=/dev/mapper/ubuntu--vg-root ro  quiet splash
-        echo    'Loading initial ramdisk ...'
-        module2 --nounzip   /initrd.img-6.18.35-rt5-ll
-}
-```
-
-Also, we configured the guests to use only the pCPUs 22 and 23, so that they would have two dedicated cores with no interference from the Dom0:
-
-```conf
-# This configures either a HVM, a PVH or a PV guest
-type = "hvm"
-
-# Guest name
-name = "ubuntu-24.04-linux-6.18.35-rt5"
-
-# Kernel image to boot
-kernel = "/boot/vmlinuz-6.18.35-rt5"
-
-# Ramdisk (optional)
-ramdisk = "/boot/initrd.img-6.18.35-rt5"
-
-# Kernel command line options (to show output on console)
-extra = "root=/dev/xvda console=hvc0"
-
-# Initial memory allocation (4GB)
-memory = 4096
-maxmem = 4096
-
-# Number of VCPUS (2)
-cpus = "22-23"
-vcpus = 2
-maxvcpus = 2
-
-# Network devices
-vif = [ 'bridge=xenbr0' ]
-
-# Disk Devices
-disk = [ '/dev/ubuntu-vg/ubuntu-24.04-domU,raw,xvda,rw' ]
-```
+This configuration makes Xen to use only the first 22 pCPUs for Dom0. Also, we configured the pinned guests to use only the pCPUs 22 and 23, so that they would have two dedicated cores with no interference from the Dom0.
 
 To be absolutely certain of the vCPUS to pCPUs fixed mapping, we also executed the following commands after the VM booted:
 
@@ -466,26 +296,67 @@ sudo xl vcpu-pin ubuntu-24.04-linux-6.18.35-rt5 0 22
 sudo xl vcpu-pin ubuntu-24.04-linux-6.18.35-rt5 1 23
 ```
 
-### 1. Accessing Dom0 via SSH
-To launch a shell on the Dom0 administrative domain, a remote connection was established from a secondary machine. This approach allows for the remote execution of commands as if operating locally, which is a necessary step since in our setup the system running the Xen hypervisor lacked a Graphical User Interface (GUI).
+### TACLe Benchmark
 
-#### Step 1.1: Establishing the remote connection
-Execute the following command to access Dom0 from the secondary machine:
+We designed the following configurations to run the TACLe benchmarks:
+
+| Name | ubuntu24.04-tacle | ubuntu24.04-tacle-pinned |
+|---|---|---|
+| **vCPUs:** | 2 | 2 |
+| **RAM:** | 4 GB | 4 GB |
+| **Isolation techniques** | Memory locking, CPU pass-through | CPU pinning, memory locking, CPU pass-through, OS-level isolation |
+| **Configuration file** | [ubuntu24.04-tacle.xml](KVM/vms/ubuntu24.04-tacle.xml) | [ubuntu24.04-tacle-pinned.xml](KVM/vms/ubuntu24.04-tacle-pinned.xml) |
+
+We configured them the same way we did for the `ubuntu24.04` and `ubuntu24.04-pinned` VMs respectively, with the exception of the pinning layout of the emulation and I/O threads. These four also share the same virtual drive, since only one of them will be turned on at a time.
+
+For the noisy guests, we provisioned similar VMs, but with different specs and no real-time vCPU priority assigned:
+
+| Name | ubuntu24.04-noise-small | ubuntu24.04-noise-big | ubuntu24.04-noise-big-pinned |
+|---|---|---|---|
+| **vCPUs:** | 2 | 16 | 16 |
+| **RAM:** | 4 GB | 16 GB | 16 GB |
+| **Isolation techniques** | Memory locking, CPU pass-through | Memory locking, CPU pass-through | CPU pinning, memory locking, CPU pass-through |
+| **Configuration file** | [ubuntu24.04-noise-small.xml](KVM/vms/ubuntu24.04-noise-small.xml) | [ubuntu24.04-noise-big.xml](KVM/vms/ubuntu24.04-noise-big.xml) | [ubuntu24.04-noise-big-pinned.xml](KVM/vms/ubuntu24.04-noise-big-pinned.xml) |
+
+These three also share a different virtual drive, that does not require any modification but the installation of `stress-ng`:
 
 ```bash
-ssh unina@192.168.1.166
+sudo apt -y install stress-ng
 ```
 
-#### Step 1.2: Guest domain creation
-Subsequently, a guest virtual machine (DomU) was initialized based on the configuration specified during the setup phase by executing the following command:
+## Benchmark automation
+
+In order to streamline the testing procedure, a series of supplementary configuration steps were required. Since these procedures apply identically across both virtualization platforms, the following terminology will be used for simplicity: the term **Host** will refer collectively to the KVM Host and the Xen Dom0, while the term **Guest** will denote both the KVM virtual machine and the Xen DomU.
+
+First, we installed `openssh-server` and `expect` on the Host to orchestrate the benchmarks from a remote machine and interact with the Guest OS via the `xl` and `virsh` consoles.
 
 ```bash
-sudo xl create -c /etc/xen/ubuntu-24.04-linux-6.18.35.conf
+sudo apt -y install openssh-server expect
 ```
 
-#### Step 1.3: Executing the cyclictest utility
-Finally, the `cyclictest` tool was executed to measure system latency, employing the identical parameters previously defined for the KVM testing environment:
+To enable passwordless SSH access, we generated an SSH key pair on the orchestrator machine and appended the public key to the `authorized_keys` file on the Host:
 
 ```bash
-sudo cyclictest --mlockall --priority=99 --threads=1 --affinity=1 --interval=50 --duration 5m -H 1000 --histfile="results_ll_rt.log"
+ssh-keygen -t ed25519 -C "xen-vs-kvm-orchestrator"
+ssh-copy-id matt@192.168.1.166
+```
+
+To facilitate operations requiring root privileges without manual intervention, we added the following rule to the `/etc/sudoers` file on the Host and Guests using `visudo`:
+
+```text
+matt ALL=(ALL) NOPASSWD: ALL
+```
+
+To automatically boot on the appropriate kernel with the correct settings, we modified the GRUB configuration in `/etc/default/grub` on the Host and KVM Guests:
+
+```text
+GRUB_DEFAULT=saved
+GRUB_TIMEOUT_STYLE=menu
+GRUB_TIMEOUT=5
+```
+
+For the KVM Guests, we enabled the serial console by enabling the corresponding `systemctl` service:
+
+```bash
+sudo systemctl enable --now serial-getty@ttyS0.service
 ```

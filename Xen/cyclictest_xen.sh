@@ -10,7 +10,7 @@ DOMU_USER="matt"
 DOMU_PASS="YOUR_DOMU_PASSWORD"
 
 # Local directory where results are collected
-RESULTS_DIR="./results_various_stressors"
+RESULTS_DIR="./results"
 
 # DomU virtual disk device (as seen on Dom0) and the mount point used to
 # retrieve cyclictest output files after the guest has been destroyed.
@@ -49,31 +49,17 @@ declare -A KERNEL_GUEST_MAP=(
     ["LL-pinned"]="guest-nrt-pinned-hvm guest-rt5-pinned-hvm"
 )
 
-# ---------------------------------------------------------------------------
-# Stressor definitions
-#
-# ALWAYS_ON_STRESSORS : launched at the start of every guest experiment and
-#                       kept alive for all four stressor scenarios.
-# SEQUENTIAL_STRESSORS: launched one at a time for each scenario; killed and
-#                       caches are dropped between scenarios.
-# ---------------------------------------------------------------------------
+# Order of stressor scenarios to run for each guest
+STRESSOR_ORDER=("baseline" "stresshost" "stresshost_maxprioqemu")
 
-# cpu + vm run continuously during all scenarios
-ALWAYS_ON_STRESSORS=(
+# ---------------------------------------------------------------------------
+# Host stress-ng stressors (CPU and VM as separate processes).
+# Used in scenarios 2 and 3.
+# ---------------------------------------------------------------------------
+DOM0_STRESS_CMDs=(
     "nohup sudo stress-ng --cpu 22 --timeout 0 > /dev/null 2>&1 &"
     "nohup sudo stress-ng --vm 12 --vm-bytes 2G --timeout 0 > /dev/null 2>&1 &"
 )
-
-# These run one at a time alongside the always-on stressors.
-# "baseline" means no extra stressor (cpu + vm only).
-declare -A SEQUENTIAL_STRESSORS=(
-    ["baseline"]=""
-    ["cache"]="nohup sudo stress-ng --cache 0 --timeout 0 > /dev/null 2>&1 &"
-    ["interrupts"]="nohup sudo stress-ng --interrupts --timeout 0 > /dev/null 2>&1 &"
-    ["rawsock"]="nohup sudo stress-ng --rawsock 22 --timeout 0 > /dev/null 2>&1 &"
-)
-
-STRESSOR_ORDER=("baseline" "cache" "interrupts" "rawsock")
 
 # cyclictest parameters (run inside DomU)
 CYCLICTEST_DURATION="5m"
@@ -130,27 +116,45 @@ kill_stressors() {
         "sudo pkill -f stress-ng; sleep 2; sudo pkill -9 -f stress-ng 2>/dev/null; true"
 }
 
-# Start the always-on stressors on Dom0.
-start_always_on_stressors() {
-    log "Starting always-on stressors (cpu + vm)..."
-    for cmd in "${ALWAYS_ON_STRESSORS[@]}"; do
+# Start the stress-ng stressors on Dom0.
+start_dom0_stressors() {
+    log "Starting stress-ng stressors on Dom0 (cpu + vm)..."
+    for cmd in "${DOM0_STRESS_CMDs[@]}"; do
         ssh "$DOM0_USER@$DOM0_IP" "$cmd"
     done
     sleep 2
 }
 
-# Start a single sequential stressor (or nothing for 'baseline').
-# $1 = stressor label
-start_sequential_stressor() {
-    local label="$1"
-    local cmd="${SEQUENTIAL_STRESSORS[$label]}"
-    if [[ -n "$cmd" ]]; then
-        log "Starting sequential stressor: $label"
-        ssh "$DOM0_USER@$DOM0_IP" "$cmd"
-        sleep 2
-    else
-        log "No extra sequential stressor (baseline scenario)."
-    fi
+# ---------------------------------------------------------------------------
+# Set FIFO real-time priority 98 on the QEMU Device Model process for a DomU.
+# This prevents the QEMU emulator threads from being preempted by Dom0 tasks.
+# $1 = domain name
+# ---------------------------------------------------------------------------
+set_qemu_dm_rt_priority() {
+    local domain="$1"
+    log "Setting QEMU Device Model threads of '$domain' to FIFO priority 98..."
+    ssh "$DOM0_USER@$DOM0_IP" bash <<EOF
+# Find the PID of the QEMU device model for this domain.
+# The most robust way is via Xenstore.
+domid=\$(sudo xl domid '$domain' 2>/dev/null)
+if [[ -n "\$domid" ]]; then
+    qemu_pid=\$(sudo xenstore-read "/local/domain/\$domid/image/device-model-pid" 2>/dev/null)
+fi
+
+if [[ -z "\$qemu_pid" ]]; then
+    echo "WARN: could not find QEMU PID in Xenstore for '$domain'; trying pgrep fallback."
+    qemu_pid=\$(pgrep -f "qemu.*$domain" | head -1)
+fi
+
+if [[ -z "\$qemu_pid" ]]; then
+    echo "WARN: could not find QEMU PID; skipping priority assignment."
+    exit 0
+fi
+
+# Apply FIFO 98 to the main process and all its threads.
+sudo chrt -f -a -p 98 "\$qemu_pid" && echo "  chrt OK (PID \$qemu_pid)" \\
+    || echo "  WARN: chrt failed for PID \$qemu_pid"
+EOF
 }
 
 # Create a DomU and wait for it to settle.
@@ -402,10 +406,6 @@ for kernel_label in "${KERNEL_ORDER[@]}"; do
         log "   conf       : $guest_cfg"
         log "----------------------------------------------------------------"
 
-        # Start always-on stressors once at the beginning of this guest's
-        # experiment block (they will be restarted after each scenario cleanup)
-        start_always_on_stressors
-
         # -----------------------------------------------------------
         # Stressor scenario loop
         # -----------------------------------------------------------
@@ -413,54 +413,52 @@ for kernel_label in "${KERNEL_ORDER[@]}"; do
 
             log "  -- Stressor scenario: $stressor_label --"
 
-            # Start the sequential stressor for this scenario
-            start_sequential_stressor "$stressor_label"
-
-            # Boot the DomU and let it settle; skip on xl create failure
+            # Boot the DomU for this specific scenario
             if ! start_guest "$guest_cfg"; then
-                # Best-effort cleanup in case xl left a partial domain behind
-                destroy_guest "$guest_name"
-                kill_stressors
-                drop_dom0_caches
-                sleep 5
+                log "  ERROR: could not start guest '$guest_name' — skipping."
                 continue
             fi
 
+            # If it's a pinned configuration, pin the vCPUs manually
+            if [[ "$kernel_label" == *"-pinned"* ]]; then
+                log "Explicitly pinning vCPU 0 to CPU 22 and vCPU 1 to CPU 23..."
+                ssh "$DOM0_USER@$DOM0_IP" "sudo xl vcpu-pin $guest_name 0 22 && sudo xl vcpu-pin $guest_name 1 23" || true
+            fi
+
+            if [[ "$stressor_label" == "baseline" ]]; then
+                log "No background stress on Dom0."
+            elif [[ "$stressor_label" == "stresshost" ]]; then
+                start_dom0_stressors
+            elif [[ "$stressor_label" == "stresshost_maxprioqemu" ]]; then
+                start_dom0_stressors
+                set_qemu_dm_rt_priority "$guest_name"
+            fi
+
             # Build descriptive names for this run
-            result_tag="${kernel_label}__${guest_key}__stressor-${stressor_label}"
+            result_tag="${kernel_label}__${guest_key}__${stressor_label}"
             remote_base="cyclictest_${result_tag}"
             local_outfile="${RESULTS_DIR}/${result_tag}"
 
             # Run cyclictest inside the DomU
             run_cyclictest_in_domu "$guest_name" "$remote_base" "$local_outfile"
 
-            # Shut down the DomU before mounting its disk
+            # Clean up stressors after the run
+            if [[ "$stressor_label" != "baseline" ]]; then
+                kill_stressors
+            fi
+            
+            # Shut down the DomU
             destroy_guest "$guest_name"
 
-            # Mount the DomU disk on Dom0, retrieve result files, unmount
+            # Retrieve the result for this scenario
             collect_domu_results "$remote_base" "$local_outfile"
-
-            # Kill ALL stress-ng (both always-on and sequential), drop caches
-            kill_stressors
-            drop_dom0_caches
+            
             sleep 5
-
-            # If more stressor scenarios remain for this guest, restart the
-            # always-on stressors so they are running for the next scenario.
-            stressor_idx=0
-            for s in "${STRESSOR_ORDER[@]}"; do
-                [[ "$s" == "$stressor_label" ]] && break
-                (( stressor_idx++ ))
-            done
-            if (( stressor_idx < ${#STRESSOR_ORDER[@]} - 1 )); then
-                start_always_on_stressors
-            fi
+            drop_dom0_caches
 
         done  # stressor scenario loop
 
-        # Final cleanup after all scenarios for this guest
-        kill_stressors
-        drop_dom0_caches
+        # Final cleanup for this guest
         sleep 5
 
     done  # guest config loop

@@ -10,7 +10,7 @@ DOMU_USER="matt"
 DOMU_PASS="YOUR_DOMU_PASSWORD"
 
 # Local directory where results are collected
-RESULTS_DIR="./results_tacle_dom0_stress"
+RESULTS_DIR="./results_tacle"
 
 # DomU virtual disk device (as seen on Dom0) and the mount point used to
 # retrieve benchmark output files after the guest has been destroyed.
@@ -22,41 +22,64 @@ DOMU_PREWARM_TIME=15
 
 # GRUB Entries — exact strings from /etc/grub.d/40_custom
 declare -A KERNELS=(
-    ["LL"]="Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 22 vCPUs"
-    ["LL-pinned"]="Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 22 vCPUs and pinning"
+    ["LL"]="Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 4 vCPUs"
+    ["LL-pinned"]="Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 4 vCPUs and pinning"
 )
 
-# Guest configurations: associative array  key -> "guest_name /path/to/guest.conf"
-# guest_name must match the 'name' field inside the .conf file (used by xl)
+# ---------------------------------------------------------------------------
+# Regular guest configurations (running TACLe)
+# ---------------------------------------------------------------------------
 declare -A GUESTS=(
     ["guest-rt5-tacle-hvm"]="ubuntu-24.04-linux-6.18.35-rt5-tacle /etc/xen/ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle-dom0noise.conf"
     ["guest-rt5-tacle-hvm-pinned"]="ubuntu-24.04-linux-6.18.35-rt5-tacle /etc/xen/ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle-pinned.conf"
 )
 
-# Ordered list of kernels to iterate (controls experiment order)
-KERNEL_ORDER=("LL" "LL-pinned")
-
-# Per-kernel guest list: only matching pairs are tested.
-# Normal kernels run with non-pinned guests; pinned kernels with pinned guests.
-declare -A KERNEL_GUEST_MAP=(
-    ["LL"]="guest-rt5-tacle-hvm"
-    ["LL-pinned"]="guest-rt5-tacle-hvm-pinned"
+# ---------------------------------------------------------------------------
+# Noisy guest configurations
+# ---------------------------------------------------------------------------
+declare -A NOISY_GUESTS=(
+    ["noisyguest-small"]="ubuntu-24.04-linux-6.18.35-noisyguest-small /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-small.conf"
+    ["noisyguest-big"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big.conf"
+    ["noisyguest-big-pinned"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big-pinned.conf"
 )
 
 # ---------------------------------------------------------------------------
-# Dom0 stressors — run persistently for the entire guest experiment block.
+# Experiment configurations
 # ---------------------------------------------------------------------------
-DOM0_STRESSORS=(
-    "nohup sudo stress-ng --cpu 22 --timeout 0 > /dev/null 2>&1 &"
-    "nohup sudo stress-ng --vm 12 --vm-bytes 2G --timeout 0 > /dev/null 2>&1 &"
+CONFIG_ORDER=("baseline" "small_noise" "big_noise" "big_noise_pinned")
+
+declare -A CONF_KERNEL=(
+    ["baseline"]="LL"
+    ["small_noise"]="LL"
+    ["big_noise"]="LL"
+    ["big_noise_pinned"]="LL-pinned"
+)
+
+declare -A CONF_DOMU=(
+    ["baseline"]="guest-rt5-tacle-hvm"
+    ["small_noise"]="guest-rt5-tacle-hvm"
+    ["big_noise"]="guest-rt5-tacle-hvm"
+    ["big_noise_pinned"]="guest-rt5-tacle-hvm-pinned"
+)
+
+declare -A CONF_NOISY=(
+    ["baseline"]="noisyguest-small"
+    ["small_noise"]="noisyguest-small"
+    ["big_noise"]="noisyguest-big"
+    ["big_noise_pinned"]="noisyguest-big-pinned"
+)
+
+# Pipe-separated stress commands to run inside the noisy guest.
+declare -A CONF_STRESS=(
+    ["baseline"]=""
+    ["small_noise"]="nohup sudo stress-ng --cpu 2 --timeout 0 > /dev/null 2>&1 &|nohup sudo stress-ng --vm 4 --vm-bytes 1G --timeout 0 > /dev/null 2>&1 &"
+    ["big_noise"]="nohup sudo stress-ng --cpu 16 --timeout 0 > /dev/null 2>&1 &|nohup sudo stress-ng --vm 16 --vm-bytes 1G --timeout 0 > /dev/null 2>&1 &"
+    ["big_noise_pinned"]="nohup sudo stress-ng --cpu 16 --timeout 0 > /dev/null 2>&1 &|nohup sudo stress-ng --vm 16 --vm-bytes 1G --timeout 0 > /dev/null 2>&1 &"
 )
 
 # ---------------------------------------------------------------------------
 # TACLe benchmarks
-# Format: associative array  label -> command
-# Commands are run from TACLE_DIR inside the DomU.
-# stdout/stderr are discarded (> /dev/null 2>&1) so nothing flows through
-# the Xen serial console emulator during the timed ru---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 TACLE_DIR="/home/matt/custom_tests"
 
 declare -A TACLE_BENCHMARKS=(
@@ -72,6 +95,7 @@ BENCHMARK_ORDER=("huff_enc" "matrix1" "lift" "test3" "debie")
 
 # How long (seconds) to wait after 'xl create' before connecting to the console
 GUEST_SETTLE_TIME=30
+NOISY_GUEST_SETTLE_TIME=30
 
 # ==============================================================================
 # HELPER FUNCTIONS
@@ -109,22 +133,6 @@ drop_dom0_caches() {
     ssh "$DOM0_USER@$DOM0_IP" "sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null"
 }
 
-# Kill all stress-ng processes on Dom0.
-kill_stressors() {
-    log "Killing all stress-ng processes on Dom0..."
-    ssh "$DOM0_USER@$DOM0_IP" \
-        "sudo pkill -f stress-ng; sleep 2; sudo pkill -9 -f stress-ng 2>/dev/null; true"
-}
-
-# Start the Dom0 stressors (cpu + vm).
-start_dom0_stressors() {
-    log "Starting Dom0 stressors (cpu + vm)..."
-    for cmd in "${DOM0_STRESSORS[@]}"; do
-        ssh "$DOM0_USER@$DOM0_IP" "$cmd"
-    done
-    sleep 2
-}
-
 # Read the domain name declared inside a Xen config file (on Dom0).
 # $1 = conf file path
 get_guest_name() {
@@ -134,21 +142,19 @@ get_guest_name() {
 }
 
 # Create a DomU and wait for it to settle.
-# Retries xl create up to 3 times with a 15 s delay to ride out transient
-# xenbr0 unavailability (NetworkManager briefly reconfigures the bridge after
-# a VIF is detached on destroy, causing the next create to fail intermittently).
-# Returns non-zero if all attempts fail.
 # $1 = guest config path
+# $2 = settle time in seconds (default: GUEST_SETTLE_TIME)
 start_guest() {
     local cfg="$1"
+    local settle="${2:-$GUEST_SETTLE_TIME}"
     local max_attempts=3
     local retry_delay=15
 
     for (( attempt=1; attempt<=max_attempts; attempt++ )); do
         log "Creating DomU from config: $cfg (attempt $attempt/$max_attempts)"
         if ssh "$DOM0_USER@$DOM0_IP" "sudo xl create '$cfg'"; then
-            log "Waiting ${GUEST_SETTLE_TIME} s for DomU to boot..."
-            sleep "$GUEST_SETTLE_TIME"
+            log "Waiting ${settle} s for DomU to boot..."
+            sleep "$settle"
             return 0
         fi
         if (( attempt < max_attempts )); then
@@ -176,11 +182,64 @@ destroy_guest() {
     sleep 3
 }
 
+# Log into the noisy DomU via xl console and start stress-ng in the background.
+# $1 = domain name of the noisy guest
+# $2 = pipe-separated stress commands
+launch_noisy_domu_stress() {
+    local guest_name="$1"
+    local stress_cmds="$2"
+
+    if [ -z "$stress_cmds" ]; then
+        log "No stress commands to run for noisy DomU '${guest_name}'."
+        return 0
+    fi
+
+    log "Logging into noisy DomU '${guest_name}' to start stress-ng..."
+
+    local login_timeout=$(( NOISY_GUEST_SETTLE_TIME + 270 ))
+    local stress_tcl_block=""
+    
+    IFS='|' read -ra cmds <<< "$stress_cmds"
+    for cmd in "${cmds[@]}"; do
+        stress_tcl_block+="send \"${cmd}\\r\"\nset timeout 30\nexpect -re {[#\$] }\n"
+    done
+
+    ssh "$DOM0_USER@$DOM0_IP" bash <<REMOTE_EOF
+sudo expect << 'EXPECT_SCRIPT'
+set timeout ${login_timeout}
+log_user 1
+
+spawn sudo xl console ${guest_name}
+
+# Poke the console to surface whatever prompt is waiting
+send "\r"
+
+expect {
+    timeout {
+        send_user "ERROR: timed out waiting for noisy DomU login prompt\n"
+exit 1
+    }
+    -re {(?:login|Login):\s*$} {
+        send "${DOMU_USER}\r"
+        expect -re {(?:password|Password):\s*$}
+        send "${DOMU_PASS}\r"
+        expect -re {[#\$] }
+    }
+    -re {[#\$] } {}
+}
+
+$(printf '%b' "${stress_tcl_block}")
+
+# Log out
+send "exit\r"
+expect -re {(?:login|Login):\s*$}
+send "\x1d"
+expect eof
+EXPECT_SCRIPT
+REMOTE_EOF
+}
+
 # Run a single TACLe benchmark inside a DomU via xl console + expect.
-# The benchmark writes its histfile to TACLE_DIR inside the DomU.
-# stdout/stderr are discarded so nothing flows through the Xen serial console
-# emulator during the timed run (which would inflate measured latencies).
-#
 # $1 = domain name (for xl console)
 # $2 = benchmark label (for logging)
 # $3 = benchmark command (run from TACLE_DIR; must include --histfile=...)
@@ -208,8 +267,6 @@ spawn sudo xl console ${guest_name}
 send "\r"
 
 # Wait for either a login prompt or an already-open shell prompt.
-# Pattern {[#$] } matches "$ " or "# " without an EOL anchor so it fires
-# immediately when the prompt appears rather than waiting for timeout.
 expect {
     timeout {
         send_user "ERROR: timed out waiting for login or shell prompt\n"
@@ -308,78 +365,78 @@ preflight_check() {
 
 preflight_check
 
-for kernel_label in "${KERNEL_ORDER[@]}"; do
+current_kernel=""
+
+for config in "${CONFIG_ORDER[@]}"; do
+    kernel_label="${CONF_KERNEL[$config]}"
+    domu_key="${CONF_DOMU[$config]}"
+    noisy_key="${CONF_NOISY[$config]}"
+    stress_cmds="${CONF_STRESS[$config]}"
+    
     grub_entry="${KERNELS[$kernel_label]}"
 
     log "================================================================"
-    log " Switching to kernel config: $kernel_label"
+    log " Starting experiment config: $config"
     log "================================================================"
 
-    log "Setting grub-reboot to '${grub_entry}' and rebooting Dom0..."
-    ssh "$DOM0_USER@$DOM0_IP" "sudo grub-reboot '${grub_entry}' && sudo reboot" || true
-    wait_for_reboot
+    if [ "$current_kernel" != "$kernel_label" ]; then
+        log "Switching to kernel config: $kernel_label"
+        log "Setting grub-reboot to '${grub_entry}' and rebooting Dom0..."
+        ssh "$DOM0_USER@$DOM0_IP" "sudo grub-reboot '${grub_entry}' && sudo reboot" || true
+        wait_for_reboot
+        current_kernel="$kernel_label"
+    else
+        log "Kernel already set to $kernel_label, no reboot needed."
+    fi
 
-    # ------------------------------------------------------------------
-    # Guest loop — only the guests that match this kernel's pinning style
-    # ------------------------------------------------------------------
-    read -ra kernel_guests <<< "${KERNEL_GUEST_MAP[$kernel_label]}"
-    for guest_key in "${kernel_guests[@]}"; do
-        read -r guest_name guest_cfg <<< "${GUESTS[$guest_key]}"
+    # Boot the noisy guest
+    read -r noisy_name noisy_cfg <<< "${NOISY_GUESTS[$noisy_key]}"
+    log "----------------------------------------------------------------"
+    log " Booting noisy DomU: $noisy_name"
+    log "   conf : $noisy_cfg"
+    log "   settle time : ${NOISY_GUEST_SETTLE_TIME} s"
+    log "----------------------------------------------------------------"
+    
+    if ! start_guest "$noisy_cfg" "$NOISY_GUEST_SETTLE_TIME"; then
+        log "ERROR: could not boot noisy DomU for config '$config'. Skipping."
+        continue
+    fi
 
-        log "----------------------------------------------------------------"
-        log " Guest config : $guest_key"
-        log "   name       : $guest_name"
-        log "   conf       : $guest_cfg"
-        log "----------------------------------------------------------------"
+    launch_noisy_domu_stress "$noisy_name" "$stress_cmds"
 
-        # Start Dom0 stressors for the entire guest experiment block
-        start_dom0_stressors
+    read -r guest_name guest_cfg <<< "${GUESTS[$domu_key]}"
 
-        # --------------------------------------------------------------
-        # Benchmark loop — each benchmark gets a fresh DomU boot
-        # --------------------------------------------------------------
-        for bench_label in "${BENCHMARK_ORDER[@]}"; do
-            bench_cmd="${TACLE_BENCHMARKS[$bench_label]}"
+    # Benchmark loop
+    for bench_label in "${BENCHMARK_ORDER[@]}"; do
+        bench_cmd="${TACLE_BENCHMARKS[$bench_label]}"
+        histfile_basename=$(echo "$bench_cmd" | grep -oP '(?<=--histfile=)\S+')
 
-            # Extract the histfile basename from the --histfile= argument
-            histfile_basename=$(echo "$bench_cmd" | grep -oP '(?<=--histfile=)\S+')
+        log "  -- Benchmark: $bench_label (Config: $config) --"
 
-            log "  -- Benchmark: $bench_label --"
-
-            # Boot a fresh DomU; skip this benchmark on xl create failure
-            if ! start_guest "$guest_cfg"; then
-                # Best-effort cleanup in case xl left a partial domain behind
-                destroy_guest "$guest_name"
-                drop_dom0_caches
-                sleep 5
-                continue
-            fi
-
-            # Run the benchmark inside the DomU
-            run_benchmark_in_domu "$guest_name" "$bench_label" "$bench_cmd"
-
-            # Destroy the DomU before mounting its disk
+        if ! start_guest "$guest_cfg" "$GUEST_SETTLE_TIME"; then
             destroy_guest "$guest_name"
-
-            # Mount the disk, copy the histfile, unmount
-            local_outfile="${RESULTS_DIR}/${kernel_label}__${guest_key}__${bench_label}.log"
-            collect_benchmark_result "$histfile_basename" "$local_outfile"
-
             drop_dom0_caches
             sleep 5
+            continue
+        fi
 
-        done  # benchmark loop
+        run_benchmark_in_domu "$guest_name" "$bench_label" "$bench_cmd"
 
-        # Tear down Dom0 stressors after all benchmarks for this guest
-        kill_stressors
+        destroy_guest "$guest_name"
+
+        local_outfile="${RESULTS_DIR}/${config}__${bench_label}.log"
+        collect_benchmark_result "$histfile_basename" "$local_outfile"
+
         drop_dom0_caches
         sleep 5
+    done
 
-    done  # guest loop
+    log "Destroying noisy DomU: $noisy_name"
+    destroy_guest "$noisy_name"
+    drop_dom0_caches
+    sleep 5
 
-    log "All benchmarks tested under kernel '$kernel_label'."
-
-done  # kernel loop
+done
 
 log "================================================================"
 log " All experiments completed."

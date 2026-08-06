@@ -47,10 +47,10 @@ KERNEL_ORDER=("NRT-4vcpu" "NRT-4vcpu-pinned" "LL-4vcpu" "LL-4vcpu-pinned")
 
 # Per-kernel noisy guest: key -> "domain_name /path/to/conf"
 declare -A NOISY_GUESTS=(
-    ["NRT-4vcpu"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big.conf"
-    ["NRT-4vcpu-pinned"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big-pinned.conf"
-    ["LL-4vcpu"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big.conf"
-    ["LL-4vcpu-pinned"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big-pinned.conf"
+    ["NRT-4vcpu"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big.conf"
+    ["NRT-4vcpu-pinned"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big-pinned.conf"
+    ["LL-4vcpu"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big.conf"
+    ["LL-4vcpu-pinned"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big-pinned.conf"
 )
 
 # stress-ng commands to run inside the noisy DomU.
@@ -65,10 +65,10 @@ NOISY_STRESS_CMDS=(
 # key -> "domain_name /path/to/conf"
 # ---------------------------------------------------------------------------
 declare -A GUESTS=(
-    ["guest-nrt-hvm"]="ubuntu-24.04-linux-6.18.35 /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm.conf"
-    ["guest-nrt-pinned-hvm"]="ubuntu-24.04-linux-6.18.35 /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-pinned.conf"
-    ["guest-rt5-hvm"]="ubuntu-24.04-linux-6.18.35-rt5 /etc/xen/ubuntu-24.04-linux-6.18-35-rt5-hvm.conf"
-    ["guest-rt5-pinned-hvm"]="ubuntu-24.04-linux-6.18.35-rt5 /etc/xen/ubuntu-24.04-linux-6.18-35-rt5-hvm-pinned.conf"
+    ["guest-nrt-hvm"]="ubuntu-24.04-linux-6.18.35 /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm.conf"
+    ["guest-nrt-pinned-hvm"]="ubuntu-24.04-linux-6.18.35 /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-pinned.conf"
+    ["guest-rt5-hvm"]="ubuntu-24.04-linux-6.18.35-rt5 /etc/xen/ubuntu-24.04-linux-6.18.35-rt5-hvm.conf"
+    ["guest-rt5-pinned-hvm"]="ubuntu-24.04-linux-6.18.35-rt5 /etc/xen/ubuntu-24.04-linux-6.18.35-rt5-hvm-pinned.conf"
 )
 
 # Per-kernel regular guest list (pinning must match Dom0 and the noisy guest)
