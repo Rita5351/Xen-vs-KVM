@@ -20,40 +20,30 @@ DOMU_MOUNT_POINT="/mnt/domU"
 # Seconds to wait inside DomU after login before starting a benchmark
 DOMU_PREWARM_TIME=15
 
-# GRUB Entries — exact strings from /etc/grub.d/40_custom
-declare -A KERNELS=(
-    ["LL"]="Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 4 vCPUs"
-    ["LL-pinned"]="Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 4 vCPUs and pinning"
-)
+# GRUB Entry — exact string from /etc/grub.d/40_custom
+GRUB_ENTRY="Xen 4.17-amd64 Linux 6.18.35-rt5-ll Dom0 4 vCPUs and pinning"
 
 # ---------------------------------------------------------------------------
 # Regular guest configurations (running TACLe)
 # ---------------------------------------------------------------------------
 declare -A GUESTS=(
-    ["guest-rt5-tacle-hvm"]="ubuntu-24.04-linux-6.18.35-rt5-tacle /etc/xen/ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle-dom0noise.conf"
-    ["guest-rt5-tacle-hvm-pinned"]="ubuntu-24.04-linux-6.18.35-rt5-tacle /etc/xen/ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle-pinned.conf"
+    ["guest-rt5-tacle-hvm"]="ubuntu-24.04-linux-6.18.35-rt5-tacle /etc/xen/ubuntu-24.04-linux-6.18-35-rt5-hvm-tacle.conf"
+    ["guest-rt5-tacle-hvm-pinned"]="ubuntu-24.04-linux-6.18.35-rt5-tacle /etc/xen/ubuntu-24.04-linux-6.18-35-rt5-hvm-tacle-pinned.conf"
 )
 
 # ---------------------------------------------------------------------------
 # Noisy guest configurations
 # ---------------------------------------------------------------------------
 declare -A NOISY_GUESTS=(
-    ["noisyguest-small"]="ubuntu-24.04-linux-6.18.35-noisyguest-small /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-small.conf"
-    ["noisyguest-big"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big.conf"
-    ["noisyguest-big-pinned"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big-pinned.conf"
+    ["noisyguest-small"]="ubuntu-24.04-linux-6.18.35-noisyguest-small /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-small.conf"
+    ["noisyguest-big"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big.conf"
+    ["noisyguest-big-pinned"]="ubuntu-24.04-linux-6.18.35-noisyguest-big /etc/xen/ubuntu-24.04-linux-6.18-35-nrt-hvm-noisyguest-big-pinned.conf"
 )
 
 # ---------------------------------------------------------------------------
 # Experiment configurations
 # ---------------------------------------------------------------------------
 CONFIG_ORDER=("baseline" "small_noise" "big_noise" "big_noise_pinned")
-
-declare -A CONF_KERNEL=(
-    ["baseline"]="LL"
-    ["small_noise"]="LL"
-    ["big_noise"]="LL"
-    ["big_noise_pinned"]="LL-pinned"
-)
 
 declare -A CONF_DOMU=(
     ["baseline"]="guest-rt5-tacle-hvm"
@@ -365,29 +355,21 @@ preflight_check() {
 
 preflight_check
 
-current_kernel=""
+log "================================================================"
+log " Ensuring Dom0 is booted into the correct kernel..."
+log "================================================================"
+log "Setting grub-reboot to '${GRUB_ENTRY}' and rebooting Dom0..."
+ssh "$DOM0_USER@$DOM0_IP" "sudo grub-reboot '${GRUB_ENTRY}' && sudo reboot" || true
+wait_for_reboot
 
 for config in "${CONFIG_ORDER[@]}"; do
-    kernel_label="${CONF_KERNEL[$config]}"
     domu_key="${CONF_DOMU[$config]}"
     noisy_key="${CONF_NOISY[$config]}"
     stress_cmds="${CONF_STRESS[$config]}"
     
-    grub_entry="${KERNELS[$kernel_label]}"
-
     log "================================================================"
     log " Starting experiment config: $config"
     log "================================================================"
-
-    if [ "$current_kernel" != "$kernel_label" ]; then
-        log "Switching to kernel config: $kernel_label"
-        log "Setting grub-reboot to '${grub_entry}' and rebooting Dom0..."
-        ssh "$DOM0_USER@$DOM0_IP" "sudo grub-reboot '${grub_entry}' && sudo reboot" || true
-        wait_for_reboot
-        current_kernel="$kernel_label"
-    else
-        log "Kernel already set to $kernel_label, no reboot needed."
-    fi
 
     # Boot the noisy guest
     read -r noisy_name noisy_cfg <<< "${NOISY_GUESTS[$noisy_key]}"
