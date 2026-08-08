@@ -335,7 +335,7 @@ To evaluate system determinism and upper latency bounds under severe conditions,
 Experimental analysis demonstrates that while isolating resources via static pinning establishes a baseline of predictability, the system's Worst-Case Execution Time (WCET) is not uniform; rather, it reveals behaviors that depend strictly on the specific combination of kernel optimizations applied across the domains:
 
 * **Efficacy of DomU Real-Time Patches:** Applying `PREEMPT_RT` patches to the DomU drastically reduces maximum latency spikes, even when the control domain is under stress. While an unoptimized DomU suffers from stress-induced delays peaking at 443 µs, an RT-optimized DomU successfully shields its critical sections, capping the WCET to 76 µs even when paired with an unoptimized Dom0.
-* **Impact of Dom0 Kernel Tuning:** The kernel configuration of the control domain plays a vital role in mitigating severe preemption events. Upgrading Dom0 to a Low Latency kernel significantly improves overall system bounds, cutting the maximum latency for a standard DomU by more than half (from 443 µs to 179 µs) and pushing an RT DomU to a recorded bound of 163 µs.
+* **Impact of Dom0 Kernel Tuning:** The kernel configuration of the control domain plays a vital role in mitigating severe preemption events. Upgrading Dom0 to a Low Latency kernel significantly improves overall system bounds, cutting the maximum latency for a standard DomU by more than half (from 443 µs to 410 µs) and pushing an RT DomU to a recorded bound of 163 µs.
 * **Persistent Virtualization Overhead:** Despite the dramatic improvements in maximum latency achieved through kernel patches and core pinning, the average latency remains rigidly fixed at approximately 32–33 µs across every tested configuration. This phenomenon indicates that the baseline jitter introduced by the Xen hypervisor layer is a structural constant that cannot be bypassed by domain-level scheduling optimizations alone.
 
 In this section, we will analyze the detailed results of these specific configurations to quantify the determinism and virtualization overhead achievable in a statically pinned Xen architecture.
@@ -382,11 +382,11 @@ This section analyzes the results obtained from a single, prolonged 5-minute exe
 The data collected confirms the consistent baseline behavior of the Xen infrastructure. The average latency remained at 32 µs throughout the entire 5-minute test. The absolute minimum latency achieved was 3 µs.
  
 #### Worst-Case Execution Time (WCET) Analysis
-The analysis of the Worst-Case Execution Time (WCET) suggests tangible benefits from this configuration. Over the sustained execution, the absolute maximum latency was bounded at 179 µs. This result indicates that the low-latency optimizations within the Dom0, paired with static pinning, helped to significantly mitigate severe preemption spikes compared to a standard Dom0 kernel (reducing the peak from 443 µs to 179 µs).
+The analysis of the Worst-Case Execution Time (WCET) suggests tangible benefits from this configuration. Over the sustained execution, the absolute maximum latency was bounded at 410 µs. This result indicates that the low-latency optimizations within the Dom0, paired with static pinning, helped to significantly mitigate severe preemption spikes compared to a standard Dom0 kernel (reducing the peak from 443 µs to 410 µs).
  
 #### Observations on the Low Latency Xen Environment
 The empirical observation of this sustained test provides insights into the capabilities of a Low Latency Dom0 running with a NRT DomU and static pinning:
-* **Predictable Upper Bounds:** The Low Latency kernel tuning bounded the WCET to 179 µs during the test.
+* **Predictable Upper Bounds:** The Low Latency kernel tuning bounded the WCET to 410 µs during the test.
 * **Persistent Hypervisor Jitter:** The average latency of 32 µs confirms that the baseline virtualization overhead dictates the nominal jitter.
 * **Suitability:** This configuration presents a solid improvement in maximum latency over the strictly NRT environment, offering enhanced predictability without requiring a fully patched RT DomU.
  
@@ -425,7 +425,7 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 32.87 ± 15.17 µs | 35.52 ± 15.50 µs |
+| **Average ± SD** | 32.87 ± 15.17 µs | 35.52 ± 15.50 µs |
 | **WCET (Max)** | 369 µs | 239 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -437,7 +437,7 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 33.20 ± 15.12 µs | 35.86 ± 15.54 µs |
+| **Average ± SD** | 33.20 ± 15.12 µs | 35.86 ± 15.54 µs |
 | **WCET (Max)** | 74 µs | 177 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -449,7 +449,7 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 32.71 ± 15.17 µs | 35.58 ± 15.55 µs |
+| **Average ± SD** | 32.71 ± 15.17 µs | 35.58 ± 15.55 µs |
 | **WCET (Max)** | 152 µs | 526 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -461,7 +461,7 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 32.89 ± 15.14 µs | 35.66 ± 15.60 µs |
+| **Average ± SD** | 32.89 ± 15.14 µs | 35.66 ± 15.60 µs |
 | **WCET (Max)** | 71 µs | 209 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -474,7 +474,7 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 
 | METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 32.65 ± 15.17 µs | 32.76 ± 15.10 µs |
+| **Average ± SD** | 32.65 ± 15.17 µs | 32.76 ± 15.10 µs |
 | **WCET (Max)** | 137 µs | 443 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -486,7 +486,7 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 
 | METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 32.59 ± 15.16 µs | 33.23 ± 15.09 µs |
+| **Average ± SD** | 32.59 ± 15.16 µs | 33.23 ± 15.09 µs |
 | **WCET (Max)** | 67 µs | 76 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -497,7 +497,7 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 
 | METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 32.49 ± 15.19 µs | 32.83 ± 15.06 µs |
+| **Average ± SD** | 32.49 ± 15.19 µs | 32.83 ± 15.06 µs |
 | **WCET (Max)** | 179 µs | 410 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -509,7 +509,7 @@ Furthermore, alongside the consolidated WCET table, this section presents a deta
 
 | METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 33.09 ± 15.18 µs | 32.73 ± 15.09 µs |
+| **Average ± SD** | 33.09 ± 15.18 µs | 32.73 ± 15.09 µs |
 | **WCET (Max)** | 65 µs | 163 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -1044,10 +1044,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### DEBIE
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| --- | --- | --- |
-| **Mean ± SD** | 27175.71 ± 1309.25 µs | 28196.64 ± 3277.83 µs |
-| **WCET (Max)** | 31048 µs | 57314 µs |
+| METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Average ± SD** | 27175.71 ± 1309.25 µs | 27118.01 ± 1312.34 µs | 28196.64 ± 3277.83 µs | 27274.32 ± 1328.13 µs |
+| **WCET (Max)** | 31048 µs | 31022 µs | 57314 µs | 41266 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 
@@ -1058,10 +1058,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### HUFFENC
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| --- | --- | --- |
-| **Mean ± SD** | 16.18 ± 1.22 µs | 19.05 ± 5.71 µs |
-| **WCET (Max)** | 35 µs | 182 µs |
+| METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Average ± SD** | 16.18 ± 1.22 µs | 16.18 ± 1.20 µs | 19.05 ± 5.71 µs | 16.23 ± 1.52 µs |
+| **WCET (Max)** | 35 µs | 35 µs | 182 µs | 42 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 
@@ -1072,10 +1072,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### LIFT
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| --- | --- | --- |
-| **Mean ± SD** | 19.23 ± 1.32 µs | 20.43 ± 4.91 µs |
-| **WCET (Max)** | 85 µs | 142 µs |
+| METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Average ± SD** | 19.23 ± 1.32 µs | 19.23 ± 1.29 µs | 20.43 ± 4.91 µs | 19.34 ± 1.81 µs |
+| **WCET (Max)** | 85 µs | 36 µs | 142 µs | 43 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 
@@ -1086,10 +1086,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### MATRIX1
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| --- | --- | --- |
-| **Mean ± SD** | 0.00 ± 0.17 µs | 0.01 ± 0.30 µs |
-| **WCET (Max)** | 9 µs | 45 µs |
+| METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Average ± SD** | 0.00 ± 0.17 µs | 0.00 ± 0.13 µs | 0.01 ± 0.30 µs | 0.01 ± 0.20 µs |
+| **WCET (Max)** | 9 µs | 8 µs | 45 µs | 11 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 
@@ -1100,10 +1100,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### TEST3
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| --- | --- | --- |
-| **Mean ± SD** | 8328.16 ± 38.48 µs | 9182.95 ± 1317.37 µs |
-| **WCET (Max)** | 8414 µs | 14786 µs |
+| METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Average ± SD** | 8328.16 ± 38.48 µs | 8331.15 ± 39.52 µs | 9182.95 ± 1317.37 µs | 8701.25 ± 43.68 µs |
+| **WCET (Max)** | 8414 µs | 8885 µs | 14786 µs | 10037 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 
@@ -1380,14 +1380,14 @@ To synthesize the findings from our latency evaluations, the following table agg
 | **vCPU PINNING BASELINE** | 65 | 71 | 492 |
 | **vCPU PINNING STRESS WORKLOAD** | 163 | 71 | 285 |
 
-This section provides a quantitative breakdown of the percentage increments for both the average latency (Mean ± Standard Deviation) and the maximum latency (WCET) across Xen's three virtualization modes: HVM, PV, and PVH. The analysis evaluates the performance degradation caused by a heavy stress workload introduced in the control domain (Dom0).
+This section provides a quantitative breakdown of the percentage increments for both the average latency (Average ± Standard Deviation) and the maximum latency (WCET) across Xen's three virtualization modes: HVM, PV, and PVH. The analysis evaluates the performance degradation caused by a heavy stress workload introduced in the control domain (Dom0).
 
 The following tables illustrate the system's behavior under the default dynamic scheduler. These results highlight the performance impact of the Dom0 stress workload when no hardware isolation mechanisms are applied.
 ### HVM LL RT
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 32.89 ± 15.14 µs | 35.66 ± 15.60 µs |
+| **Average ± SD** | 32.89 ± 15.14 µs | 35.66 ± 15.60 µs |
 | **WCET (Max)** | 71 µs | 209 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -1399,7 +1399,7 @@ The following tables illustrate the system's behavior under the default dynamic 
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 37.17 ± 14.69 µs | 40.20 ± 16.22 µs |
+| **Average ± SD** | 37.17 ± 14.69 µs | 40.20 ± 16.22 µs |
 | **WCET (Max)** | 525 µs | 312 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -1411,7 +1411,7 @@ The following tables illustrate the system's behavior under the default dynamic 
 
 | METRIC | BASELINE | STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 32.40 ± 15.36 µs | 35.58 ± 15.50 µs |
+| **Average ± SD** | 32.40 ± 15.36 µs | 35.58 ± 15.50 µs |
 | **WCET (Max)** | 76 µs | 157 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -1425,7 +1425,7 @@ The tables below evaluate the resilience of the same configurations when strict 
 
 | METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 33.09 ± 15.18 µs | 32.73 ± 15.09 µs |
+| **Average ± SD** | 33.09 ± 15.18 µs | 32.73 ± 15.09 µs |
 | **WCET (Max)** | 65 µs | 163 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -1437,7 +1437,7 @@ The tables below evaluate the resilience of the same configurations when strict 
 
 | METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 40.00 ± 14.71 µs | 39.15 ± 15.23 µs |
+| **Average ± SD** | 40.00 ± 14.71 µs | 39.15 ± 15.23 µs |
 | **WCET (Max)** | 492 µs | 285 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
@@ -1449,7 +1449,7 @@ The tables below evaluate the resilience of the same configurations when strict 
 
 | METRIC | vCPU PINNING BASELINE | vCPU PINNING STRESS WORKLOAD |
 | :--- | :--- | :--- |
-| **Mean ± SD** | 33.16 ± 15.12 µs | 33.20 ± 15.09 µs |
+| **Average ± SD** | 33.16 ± 15.12 µs | 33.20 ± 15.09 µs |
 | **WCET (Max)** | 71 µs | 71 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**

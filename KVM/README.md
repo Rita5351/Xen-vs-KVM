@@ -568,10 +568,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### DEBIE
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| :--- | :--- | :--- |
-| **Mean ± SD** | 27214.36 ± 1303.61 µs | 28845.81 ± 3813.54 µs |
-| **WCET (Max)** | 32409 µs | 43849 µs |
+| METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mean ± SD** | 27214.36 ± 1303.61 µs | 28845.81 ± 3813.54 µs | 27221.56 ± 1304.61 µs | 27444.09 ± 1327.72 µs |
+| **WCET (Max)** | 32409 µs | 43849 µs | 30872 µs | 37284 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: +5.99%
@@ -582,10 +582,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### HUFFENC
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| :--- | :--- | :--- |
-| **Mean ± SD** | 16.02 ± 3.39 µs | 26.21 ± 5.01 µs |
-| **WCET (Max)** | 64 µs | 69 µs |
+| METRIC | BASELINE | BIG NOISE | SMALL NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mean ± SD** | 16.02 ± 3.39 µs | 15.86 ± 3.76 µs | 26.21 ± 5.01 µs | 16.53 ± 3.73 µs |
+| **WCET (Max)** | 64 µs | 61 µs | 69 µs | 62 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: +63.63%
@@ -596,10 +596,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### LIFT
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| :--- | :--- | :--- |
-| **Mean ± SD** | 19.44 ± 3.00 µs | 19.42 ± 3.00 µs |
-| **WCET (Max)** | 61 µs | 280 µs |
+| METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mean ± SD** | 19.44 ± 3.00 µs || 19.44 ± 2.99 µs | 19.42 ± 3.00 µs  20.31 ± 4.91 µs |
+| **WCET (Max)** | 61 µs | 58 µs | 280 µs | 67 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: -0.07%
@@ -609,10 +609,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### MATRIX1
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| :--- | :--- | :--- |
-| **Mean ± SD** | 0.00 ± 0.00 µs | 0.00 ± 0.01 µs |
-| **WCET (Max)** | 1 µs | 6 µs |
+| METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mean ± SD** | 0.00 ± 0.00 µs | 0.00 ± 0.00 µs | 0.00 ± 0.01 µs | 0.00 ± 0.00 µs |
+| **WCET (Max)** | 1 µs | 0 µs | 6 µs | 1 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: +600.00%
@@ -622,10 +622,10 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 #### TEST3
 
-| METRIC | BASELINE | STRESS WORKLOAD |
-| :--- | :--- | :--- |
-| **Mean ± SD** | 8363.95 ± 31.59 µs | 8457.93 ± 52.13 µs |
-| **WCET (Max)** | 9471 µs | 9458 µs |
+| METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
+| :--- | :--- | :--- | :--- | :--- |
+| **Mean ± SD** | 8363.95 ± 31.59 µs | 8270.33 ± 24.90 µs | 8457.93 ± 52.13 µs | 8745.21 ± 87.11 µs |
+| **WCET (Max)** | 9471 µs | 8612 µs | 9458 µs | 10996 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: +1.12%
