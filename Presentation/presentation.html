@@ -4695,34 +4695,33 @@
                 <div class="card">
                   <h3>Analysis</h3>
                   <ul class="blist blist-blue" style="margin-top:8px">
-                    <li>matrix1 analisi 1</li>
-                    <li>matrix1 analisi 2</li>
-                    <li>matrix1 analisi 3</li>
-                    <li>matrix1 analisi 4</li>
-                    <li>matrix1 analisi 5</li>
+                    <li>Average latency reads 0 µs in every scenario — the task is entirely cache-resident, essentially invisible to the scheduler except at its absolute tail</li>
+                    <li>Baseline and Small Noise are statistically indistinguishable (9 vs 8 µs WCET) — light interference has no measurable effect</li>
+                    <li>Big Noise is the only scenario that perturbs the task, driving WCET to 45 µs (<strong>5× baseline</strong>)</li>
+                    <li>Pinning recovers to 11 µs, just 2 µs above baseline — near-complete mitigation</li>
+                    <li>Same qualitative pattern as KVM (1→6 µs, 6×), at a higher absolute scale — consistent with Xen's baseline hypervisor overhead being higher than KVM's for this ultra-lightweight kernel</li>
                   </ul>
                   <div class="callout callout-green" style="margin-top:12px;padding:8px 12px">
                     <span class="callout-icon">✅</span>
-                    <div><strong>Pinning fully restores determinism:</strong> 45 µs → 11 µs (−76%). Similar pattern to
-                      KVM but Xen baseline is slightly higher (9 vs 1 µs) due to hypervisor overhead.</div>
+                    <div>matrix1 confirms the same story on Xen as on KVM: isolated, cache-resident kernel loops are nearly immune to virtualization noise, and pinning almost completely erases the one disturbance that does appear.</div>
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--red)">Problema</div>
-                        <div class="label">Colore: red</div>
+                        <div class="num" style="font-size:26px;color:var(--red)">5×</div>
+                        <div class="label">WCET increase (Big Noise)</div>
                       </div>
                     </div>
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--amber)">Attenzione</div>
-                        <div class="label">Colore: amber</div>
+                        <div class="num" style="font-size:26px;color:var(--amber)">+22%</div>
+                        <div class="label">Residual WCET vs baseline (after pinning)</div>
                       </div>
                     </div>
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--green)">Pregio</div>
-                        <div class="label">Colore: green</div>
+                        <div class="num" style="font-size:26px;color:var(--green)">−76%</div>
+                        <div class="label">WCET reduction (Pinning)</div>
                       </div>
                     </div>
                   </div>
@@ -4811,34 +4810,32 @@
                 <div class="card">
                   <h3>Analysis</h3>
                   <ul class="blist blist-blue" style="margin-top:8px">
-                    <li>huff_enc analisi 1</li>
-                    <li>huff_enc analisi 2</li>
-                    <li>huff_enc analisi 3</li>
-                    <li>huff_enc analisi 4</li>
-                    <li>huff_enc analisi 5</li>
+                    <li>Baseline and Small Noise are statistically identical (35 µs WCET, 20 µs jitter in both) — huffenc is completely immune to a light noisy neighbor (2 vCPU/4GB)</li>
+                    <li>Big Noise is the only scenario that meaningfully disturbs the task: WCET more than quintuples (35→182 µs, <strong>+420%</strong>), jitter grows 8× (20→167 µs)</li>
+                    <li>Pinning restores near-baseline behavior (42 µs WCET, 27 µs jitter) — a <strong>−77%</strong> reduction from Big Noise</li>
+                    <li>Compared to KVM (baseline WCET 64 µs), Xen's baseline (35 µs) is noticeably tighter — LL-RT appears to give huffenc a lower structural floor than KVM's RT-RT</li>
                   </ul>
                   <div class="callout callout-green" style="margin-top:12px;padding:8px 12px">
                     <span class="callout-icon">✅</span>
-                    <div><strong>Excellent recovery with pinning:</strong> 182 → 42 µs (−77%). Xen baseline WCET (35 µs)
-                      is better than KVM (64 µs) for this workload.</div>
+                    <div><strong>huffenc on Xen is essentially immune to light interference and only meaningfully disturbed by heavy noisy-neighbor load — pinning nearly fully reverses that disturbance.</div>
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--red)">Problema</div>
-                        <div class="label">Colore: red</div>
+                        <div class="num" style="font-size:26px;color:var(--red)">+420%</div>
+                        <div class="label">WCET increase (Big Noise)</div>
                       </div>
                     </div>
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--amber)">Attenzione</div>
-                        <div class="label">Colore: amber</div>
+                        <div class="num" style="font-size:26px;color:var(--amber)">8×</div>
+                        <div class="label">Jitter growth (Big Noise)</div>
                       </div>
                     </div>
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--green)">Pregio</div>
-                        <div class="label">Colore: green</div>
+                        <div class="num" style="font-size:26px;color:var(--green)">−77%</div>
+                        <div class="label">WCET reduction (Pinning)</div>
                       </div>
                     </div>
                   </div>
@@ -4927,34 +4924,32 @@
                 <div class="card">
                   <h3>Analysis</h3>
                   <ul class="blist blist-blue" style="margin-top:8px">
-                    <li>lift analisi 1</li>
-                    <li>lift analisi 2</li>
-                    <li>lift analisi 3</li>
-                    <li>lift analisi 4</li>
-                    <li>lift analisi 5</li>
+                    <li>Xen's baseline (85 µs WCET) actually carries more jitter than its own Small Noise run (36 µs) — a plausible single-run artifact (no repetitions), not evidence that noise improves determinism</li>
+                    <li>Big Noise pushes WCET to 142 µs (<strong>+67%</strong> vs baseline), the worst point in the series</li>
+                    <li>Pinning fully recovers determinism: 43 µs under Big Noise+Pinning (<strong>−70%</strong>), close to the Small-Noise figure</li>
+                    <li><strong>Vs. KVM:</strong> lift's Big-Noise WCET on KVM spiked to 280 µs (4.6× baseline); on Xen it reaches only 142 µs (1.7×) — <strong>Xen is roughly 2× more resilient</strong>on this control-loop workload</li>
                   </ul>
                   <div class="callout callout-green" style="margin-top:12px;padding:8px 12px">
                     <span class="callout-icon">⭐</span>
-                    <div><strong>Xen outperforms KVM for lift:</strong> Pinned WCET 43 µs vs KVM's 67 µs. Xen LL-RT +
-                      pinning provides better tail control for this control-loop workload.</div>
+                    <div><strong>Unlike on KVM, where lift suffered a dramatic 280 µs spike under heavy noise, Xen keeps lift's worst case within 142 µs — under half of KVM's degradation — and pinning brings it back to near-baseline levels.</div>
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--red)">Problema</div>
-                        <div class="label">Colore: red</div>
+                        <div class="num" style="font-size:26px;color:var(--red)">+67%</div>
+                        <div class="label">WCET increase (Big Noise)</div>
                       </div>
                     </div>
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--amber)">Attenzione</div>
-                        <div class="label">Colore: amber</div>
+                        <div class="num" style="font-size:26px;color:var(--amber)">+19%</div>
+                        <div class="label">Residual WCET vs Small Noise (after pinning)</div>
                       </div>
                     </div>
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--green)">Pregio</div>
-                        <div class="label">Colore: green</div>
+                        <div class="num" style="font-size:26px;color:var(--green)">−70%</div>
+                        <div class="label">WCET reduction (Pinning)</div>
                       </div>
                     </div>
                   </div>
@@ -5043,35 +5038,33 @@
                 <div class="card">
                   <h3>Analysis</h3>
                   <ul class="blist blist-blue" style="margin-top:8px">
-                    <li>test3 analisi 1</li>
-                    <li>test3 analisi 2</li>
-                    <li>test3 analisi 3</li>
-                    <li>test3 analisi 4</li>
-                    <li>test3 analisi 5</li>
+                    <li>Xen's baseline jitter (128 µs) is the tightest of any condition in this series — a well-behaved, medium-weight loop when undisturbed</li>
+                    <li>Small Noise nearly quintuples the jitter (128→599 µs) despite barely moving the average — even a light neighbor measurably lengthens the tail for this longer-running task</li>
+                    <li>Big Noise is far more severe: WCET reaches 14,786 µs (<strong>+76%</strong>), jitter balloons to 6,499 µs (<strong>~51× baseline</strong>) — the worst relative degradation of any TACLe benchmark on Xen</li>
+                    <li>Pinning recovers most, but not all: WCET drops to 10,037 µs (<strong>−32%</strong> from Big Noise), still well above baseline — unlike the near-full recovery seen in lighter benchmarks</li>
+                    <li>Unlike KVM's test3 anomaly (where pinning made things worse), Xen's pinning goes in the expected direction — but the recovery is partial, not complete</li>
                   </ul>
                   <div class="callout callout-cyan" style="margin-top:12px;padding:8px 12px">
                     <span class="callout-icon">ℹ️</span>
-                    <div><strong>Xen test3 baseline is tighter (128 µs jitter vs 1,302 µs on KVM)</strong> at baseline —
-                      Xen's LL-RT configuration provides better scheduling consistency for this steady-state compute
-                      workload. Both hypervisors show similar noise sensitivity.</div>
+                    <div><strong>test3 is the least resilient TACLe benchmark to Dom0 noise on Xen: even after pinning, WCET remains ~1,600 µs above baseline — a residual footprint pinning alone cannot fully eliminate for this longer-running compute loop.</div>
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--red)">Problema</div>
-                        <div class="label">Colore: red</div>
+                        <div class="num" style="font-size:26px;color:var(--red)">51×</div>
+                        <div class="label">Jitter explosion (Big Noise vs Baseline)</div>
                       </div>
                     </div>
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--amber)">Attenzione</div>
-                        <div class="label">Colore: amber</div>
+                        <div class="num" style="font-size:26px;color:var(--amber)">+76%</div>
+                        <div class="label">WCET increase (Big Noise)</div>
                       </div>
                     </div>
                     <div class="card" style="text-align:center;padding:20px">
                       <div class="stat">
-                        <div class="num" style="font-size:26px;color:var(--green)">Pregio</div>
-                        <div class="label">Colore: green</div>
+                        <div class="num" style="font-size:26px;color:var(--green)">−32%</div>
+                        <div class="label">WCET reduction (Pinning) — partial only</div>
                       </div>
                     </div>
                   </div>
