@@ -906,6 +906,20 @@
       #keyHint {
         display: none !important;
       }
+
+      * {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+
+      .cover-title span {
+        background: none !important;
+        -webkit-background-clip: unset !important;
+        background-clip: unset !important;
+        -webkit-text-fill-color: unset !important;
+        color: var(--cyan) !important;
+        /* mid-point of #3b82f6 → #06b6d4 */
+      }
     }
 
     .bench-pill .name {
@@ -1593,7 +1607,7 @@
                         insufficient.</div>
                     </div>
                     <div class="callout callout-red" style="padding:10px 14px">
-                      <span class="callout-icon">⚠️</span>
+                      <span class="callout-icon">❌</span>
                       <div><strong>The NRT-RT anomaly:</strong> An RT guest on a non-RT host achieves a WCET of 6.1 ms —
                         worse than the fully unoptimised NRT-NRT case! A guest-side RT patch is powerless if the host
                         cannot
@@ -2205,7 +2219,7 @@
                 <div class="card">
                   <h3>Analysis</h3>
                   <ul class="blist blist-blue" style="margin-top:8px">
-                    <li>huffenc's sequential, single-pass structure keeps latency remarkably stable at baseline: 16 µs
+                    <li>huff_enc's sequential, single-pass structure keeps latency remarkably stable at baseline: 16 µs
                       average, 49 µs jitter — already higher than matrix1 due to its more complex (non-cache-resident)
                       instruction mix</li>
                     <li>Small Noise has virtually no effect (avg 15 µs, jitter 46 µs) — statistically indistinguishable
@@ -3695,7 +3709,7 @@
             <div class="content-body">
               <div class="col">
                 <div class="card" style="flex:1">
-                  <table class="tbl tight-tbl" style="font-size:11px">
+                  <table class="tbl" style="font-size:11px">
                     <tr>
                       <th>Pinning</th>
                       <th>Guest</th>
@@ -3920,7 +3934,7 @@
             <div class="content-body">
               <div class="col">
                 <div class="card" style="flex:1">
-                  <table class="tbl tight-tbl" style="font-size:11px">
+                  <table class="tbl" style="font-size:11px">
                     <tr>
                       <th>Pinning</th>
                       <th>Guest</th>
@@ -4695,15 +4709,21 @@
                 <div class="card">
                   <h3>Analysis</h3>
                   <ul class="blist blist-blue" style="margin-top:8px">
-                    <li>Average latency reads 0 µs in every scenario — the task is entirely cache-resident, essentially invisible to the scheduler except at its absolute tail</li>
-                    <li>Baseline and Small Noise are statistically indistinguishable (9 vs 8 µs WCET) — light interference has no measurable effect</li>
-                    <li>Big Noise is the only scenario that perturbs the task, driving WCET to 45 µs (<strong>5× baseline</strong>)</li>
+                    <li>Average latency reads 0 µs in every scenario — the task is entirely cache-resident, essentially
+                      invisible to the scheduler except at its absolute tail</li>
+                    <li>Baseline and Small Noise are statistically indistinguishable (9 vs 8 µs WCET) — light
+                      interference has no measurable effect</li>
+                    <li>Big Noise is the only scenario that perturbs the task, driving WCET to 45 µs (<strong>5×
+                        baseline</strong>)</li>
                     <li>Pinning recovers to 11 µs, just 2 µs above baseline — near-complete mitigation</li>
-                    <li>Same qualitative pattern as KVM (1→6 µs, 6×), at a higher absolute scale — consistent with Xen's baseline hypervisor overhead being higher than KVM's for this ultra-lightweight kernel</li>
+                    <li>Same qualitative pattern as KVM (1→6 µs, 6×), at a higher absolute scale — consistent with Xen's
+                      baseline hypervisor overhead being higher than KVM's for this ultra-lightweight kernel</li>
                   </ul>
                   <div class="callout callout-green" style="margin-top:12px;padding:8px 12px">
                     <span class="callout-icon">✅</span>
-                    <div>matrix1 confirms the same story on Xen as on KVM: isolated, cache-resident kernel loops are nearly immune to virtualization noise, and pinning almost completely erases the one disturbance that does appear.</div>
+                    <div>matrix1 confirms the same story on Xen as on KVM: isolated, cache-resident kernel loops are
+                      nearly immune to virtualization noise, and pinning almost completely erases the one disturbance
+                      that does appear.</div>
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
                     <div class="card" style="text-align:center;padding:20px">
@@ -4810,14 +4830,19 @@
                 <div class="card">
                   <h3>Analysis</h3>
                   <ul class="blist blist-blue" style="margin-top:8px">
-                    <li>Baseline and Small Noise are statistically identical (35 µs WCET, 20 µs jitter in both) — huffenc is completely immune to a light noisy neighbor (2 vCPU/4GB)</li>
-                    <li>Big Noise is the only scenario that meaningfully disturbs the task: WCET more than quintuples (35→182 µs, <strong>+420%</strong>), jitter grows 8× (20→167 µs)</li>
-                    <li>Pinning restores near-baseline behavior (42 µs WCET, 27 µs jitter) — a <strong>−77%</strong> reduction from Big Noise</li>
-                    <li>Compared to KVM (baseline WCET 64 µs), Xen's baseline (35 µs) is noticeably tighter — LL-RT appears to give huffenc a lower structural floor than KVM's RT-RT</li>
+                    <li>Baseline and Small Noise are statistically identical (35 µs WCET, 20 µs jitter in both) —
+                      huff_enc is completely immune to a light noisy neighbor (2 vCPU/4GB)</li>
+                    <li>Big Noise is the only scenario that meaningfully disturbs the task: WCET more than quintuples
+                      (35→182 µs, <strong>+420%</strong>), jitter grows 8× (20→167 µs)</li>
+                    <li>Pinning restores near-baseline behavior (42 µs WCET, 27 µs jitter) — a <strong>−77%</strong>
+                      reduction from Big Noise</li>
+                    <li>Compared to KVM (baseline WCET 64 µs), Xen's baseline (35 µs) is noticeably tighter — LL-RT
+                      appears to give huff_enc a lower structural floor than KVM's RT-RT</li>
                   </ul>
                   <div class="callout callout-green" style="margin-top:12px;padding:8px 12px">
                     <span class="callout-icon">✅</span>
-                    <div><strong>huffenc on Xen is essentially immune to light interference and only meaningfully disturbed by heavy noisy-neighbor load — pinning nearly fully reverses that disturbance.</div>
+                    <div>huff_enc on Xen is essentially immune to light interference and only meaningfully disturbed by
+                      heavy noisy-neighbor load — pinning nearly fully reverses that disturbance.</div>
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
                     <div class="card" style="text-align:center;padding:20px">
@@ -4924,14 +4949,22 @@
                 <div class="card">
                   <h3>Analysis</h3>
                   <ul class="blist blist-blue" style="margin-top:8px">
-                    <li>Xen's baseline (85 µs WCET) actually carries more jitter than its own Small Noise run (36 µs) — a plausible single-run artifact (no repetitions), not evidence that noise improves determinism</li>
-                    <li>Big Noise pushes WCET to 142 µs (<strong>+67%</strong> vs baseline), the worst point in the series</li>
-                    <li>Pinning fully recovers determinism: 43 µs under Big Noise+Pinning (<strong>−70%</strong>), close to the Small-Noise figure</li>
-                    <li><strong>Vs. KVM:</strong> lift's Big-Noise WCET on KVM spiked to 280 µs (4.6× baseline); on Xen it reaches only 142 µs (1.7×) — <strong>Xen is roughly 2× more resilient</strong>on this control-loop workload</li>
+                    <li>Xen's baseline (85 µs WCET) actually carries more jitter than its own Small Noise run (36 µs) —
+                      a plausible single-run artifact (no repetitions), not evidence that noise improves determinism
+                    </li>
+                    <li>Big Noise pushes WCET to 142 µs (<strong>+67%</strong> vs baseline), the worst point in the
+                      series</li>
+                    <li>Pinning fully recovers determinism: 43 µs under Big Noise+Pinning (<strong>−70%</strong>), close
+                      to the Small-Noise figure</li>
+                    <li><strong>Vs. KVM:</strong> lift's Big-Noise WCET on KVM spiked to 280 µs (4.6× baseline); on Xen
+                      it reaches only 142 µs (1.7×) — <strong>Xen is roughly 2× more resilient</strong> on this
+                      control-loop workload</li>
                   </ul>
                   <div class="callout callout-green" style="margin-top:12px;padding:8px 12px">
                     <span class="callout-icon">⭐</span>
-                    <div><strong>Unlike on KVM, where lift suffered a dramatic 280 µs spike under heavy noise, Xen keeps lift's worst case within 142 µs — under half of KVM's degradation — and pinning brings it back to near-baseline levels.</div>
+                    <div>Unlike on KVM, where lift suffered a dramatic 280 µs spike under heavy noise, Xen keeps
+                      lift's worst case within 142 µs — under half of KVM's degradation — and pinning brings it back
+                      to near-baseline levels.</div>
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
                     <div class="card" style="text-align:center;padding:20px">
@@ -5038,15 +5071,23 @@
                 <div class="card">
                   <h3>Analysis</h3>
                   <ul class="blist blist-blue" style="margin-top:8px">
-                    <li>Xen's baseline jitter (128 µs) is the tightest of any condition in this series — a well-behaved, medium-weight loop when undisturbed</li>
-                    <li>Small Noise nearly quintuples the jitter (128→599 µs) despite barely moving the average — even a light neighbor measurably lengthens the tail for this longer-running task</li>
-                    <li>Big Noise is far more severe: WCET reaches 14,786 µs (<strong>+76%</strong>), jitter balloons to 6,499 µs (<strong>~51× baseline</strong>) — the worst relative degradation of any TACLe benchmark on Xen</li>
-                    <li>Pinning recovers most, but not all: WCET drops to 10,037 µs (<strong>−32%</strong> from Big Noise), still well above baseline — unlike the near-full recovery seen in lighter benchmarks</li>
-                    <li>Unlike KVM's test3 anomaly (where pinning made things worse), Xen's pinning goes in the expected direction — but the recovery is partial, not complete</li>
+                    <li>Xen's baseline jitter (128 µs) is the tightest of any condition in this series — a well-behaved,
+                      medium-weight loop when undisturbed</li>
+                    <li>Small Noise nearly quintuples the jitter (128→599 µs) despite barely moving the average — even a
+                      light neighbor measurably lengthens the tail for this longer-running task</li>
+                    <li>Big Noise is far more severe: WCET reaches 14,786 µs (<strong>+76%</strong>), jitter balloons to
+                      6,499 µs (<strong>~51× baseline</strong>) — the worst relative degradation of any TACLe benchmark
+                      on Xen</li>
+                    <li>Pinning recovers most, but not all: WCET drops to 10,037 µs (<strong>−32%</strong> from Big
+                      Noise), still well above baseline — unlike the near-full recovery seen in lighter benchmarks</li>
+                    <li>Unlike KVM's test3 anomaly (where pinning made things worse), Xen's pinning goes in the expected
+                      direction — but the recovery is partial, not complete</li>
                   </ul>
                   <div class="callout callout-cyan" style="margin-top:12px;padding:8px 12px">
                     <span class="callout-icon">ℹ️</span>
-                    <div><strong>test3 is the least resilient TACLe benchmark to Dom0 noise on Xen: even after pinning, WCET remains ~1,600 µs above baseline — a residual footprint pinning alone cannot fully eliminate for this longer-running compute loop.</div>
+                    <div>test3 is the least resilient TACLe benchmark to Dom0 noise on Xen: even after pinning, WCET
+                      remains ~1,600 µs above baseline — a residual footprint pinning alone cannot fully eliminate for
+                      this longer-running compute loop.</div>
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
                     <div class="card" style="text-align:center;padding:20px">
@@ -5518,7 +5559,6 @@
       </div>
     </div>
   </div>
-  </div>
 
   <!-- ══════════════════════════════════════
      SLIDE 27c — PV vs PVH vs HVM UNDER STATIC ALLOCATION + DOM0 STRESS
@@ -5546,8 +5586,7 @@
                   <div class="callout callout-green" style="padding:10px 14px">
                     <span class="callout-icon">⭐</span>
                     <div><strong>PVH + Pinning + PREEMPT_RT under stress: 71 µs WCET</strong> — <em>identical</em> to
-                      its
-                      own unstressed baseline. Static isolation successfully shields PVH's critical execution paths,
+                      its own unstressed baseline. Static isolation successfully shields PVH's critical execution paths,
                       achieving perfect WCET stability regardless of host load.</div>
                   </div>
                   <div class="callout callout-red" style="padding:10px 14px">
@@ -5569,7 +5608,6 @@
         </div>
       </div>
     </div>
-  </div>
   </div>
 
   <div class="slide slide-light" data-section="Xen">
