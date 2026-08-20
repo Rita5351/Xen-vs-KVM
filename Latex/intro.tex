@@ -1,0 +1,115 @@
+\section{Introduction}
+\label{sec:intro}
+
+The deployment of mixed-criticality workloads on shared hardware platforms is
+a central challenge in modern embedded and cyber-physical systems.
+Hypervisors provide spatial and temporal partitioning between guest domains of
+different criticality levels, making them an attractive building block for
+consolidating safety-critical and best-effort applications on a single physical
+machine.
+However, the scheduling overhead, interrupt handling, and resource contention
+inherent in general-purpose hypervisors can compromise the determinism required
+by hard real-time workloads.
+
+Two of the most widely studied general-purpose hypervisors, \textbf{Xen} and
+\textbf{KVM}, differ fundamentally in their architecture.
+Xen is a Type-1 (bare-metal) hypervisor with a dedicated privileged domain
+(Dom0) that mediates all device access; KVM is a Type-2 loadable kernel module
+that extends a standard Linux host into a hypervisor.
+Understanding how these architectural differences manifest as latency and jitter
+under realistic workloads is essential for practitioners who must select and
+configure a virtualization stack for mixed-criticality deployments.
+
+
+\subsection{Related Work}
+\label{sec:related}
+
+Abeni and Faggioli~\cite{abeni2019} conducted a systematic experimental
+analysis of Xen and KVM latency profiles, characterizing the impact of the
+\texttt{PREEMPT\_RT} patch at both host and guest level and quantifying the
+scheduling interference introduced by each hypervisor under background stress
+workloads.
+Their follow-up work~\cite{abeni2020} extended this analysis to include
+isolation mechanisms such as vCPU pinning and explored the Xen Null scheduler
+as a means of achieving near-static partition allocation with near-zero
+scheduling overhead.
+A further study by the same author~\cite{abeni2024} examined the behavior of
+virtualized real-time workloads in container-based and VM-based environments,
+broadening the comparison to include lightweight virtualization alternatives.
+
+Cinque~\emph{et al.}~\cite{cinque2024} assessed temporal isolation in
+safety-critical mixed-criticality systems running on a Xen hypervisor,
+identifying residual interference paths that can violate isolation boundaries
+even after applying standard hardening techniques such as IRQ affinity and
+VCPU pinning.
+Their results highlight the importance of measuring not just average-case
+but worst-case latency behavior across long observation windows.
+
+% On the unikernel front, Kuenzer~\emph{et al.}~\cite{kuenzer2021} introduced
+% Unikraft as a high-performance, specialized unikernel framework designed for
+% minimal boot time and resource footprint.
+% Unikraft allows applications to be compiled as standalone bootable images
+% without a full operating system, making it a promising guest alternative
+% for latency-sensitive workloads.
+
+
+\subsection{Contributions and Experimental Scope}
+\label{sec:contributions}
+
+This work reproduces and extends the experimental campaign of
+Abeni and Faggioli~\cite{abeni2019,abeni2020} on a current software stack
+(Linux~6.x, Xen~4.17, mainline \texttt{PREEMPT\_RT} rt5).
+Our specific contributions are:
+
+\begin{itemize}
+  \item \textbf{Baseline reproduction:} We replicate the key scheduling-latency
+        measurements of~\cite{abeni2019} using \texttt{cyclictest} across
+        all four host--guest kernel combinations
+        (NRT$\times$NRT, NRT$\times$RT, RT$\times$NRT, RT$\times$RT),
+        both with and without a background \texttt{stress-ng} workload,
+        for both KVM and Xen.
+
+  \item \textbf{Extended isolation analysis:} We evaluate the incremental
+        effect of vCPU pinning, host-side \texttt{isolcpus}/\texttt{nohz\_full},
+        IRQ affinity steering, and cache/memory-bandwidth partitioning
+        via Intel Resource Director Technology (RDT).
+
+  \item \textbf{Xen guest-type and scheduler comparison:} We compare all three
+        Xen guest types---HVM, PV, and PVH---under the Credit2 and Null
+        schedulers to identify the configuration that minimises worst-case
+        latency.
+
+  \item \textbf{TACLe benchmark experiments:} We execute five real-time
+        workloads from the TACLeBench suite~\cite{taclebench}
+        (DEBIE, \texttt{huff\_enc}, \texttt{lift}, \texttt{matrix1},
+        \texttt{test3}) inside a critical guest domain alongside a noisy
+        neighbour, quantifying worst-case execution time (WCET) degradation
+        under each configuration.
+
+%   \item \textbf{Unikraft unikernel evaluation:} We boot a
+%         Unikraft~\cite{kuenzer2021} unikernel as a guest on both KVM and Xen
+%         and compare its latency profile and resource footprint against a full
+%         Linux \texttt{PREEMPT\_RT} guest.
+\end{itemize}
+
+
+\subsection{Experimental Platform}
+\label{sec:platform}
+
+All experiments were conducted on the same physical host equipped with Intel
+VT-x hardware virtualization support and Intel Resource Director Technology
+(RDT) for cache and memory-bandwidth partitioning.
+The software stack comprised Xen~4.17-amd64 and KVM on a Linux~6.x host.
+Guest kernels spanned three configurations: non-real-time (NRT, vanilla
+Linux), Low-Latency (LL), and fully preemptible (\texttt{PREEMPT\_RT} rt5).
+Scheduling latency was measured using \texttt{cyclictest}, and worst-case
+execution time was characterized using the TACLeBench~\cite{taclebench} suite.
+Background interference was generated using \texttt{stress-ng} with
+cache-pressure, interrupt-flooding, and raw-socket stressors.
+
+The remainder of this paper is organized as follows.
+Section~\ref{sec:setup} describes the testbed configuration and kernel build
+procedure.
+Sections~\ref{sec:kvm} and~\ref{sec:xen} present the KVM and Xen experimental
+results, respectively.
+Section~\ref{sec:conclusion} concludes the paper and outlines future work.

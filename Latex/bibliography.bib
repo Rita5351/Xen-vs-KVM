@@ -1,0 +1,76 @@
+@inproceedings{abeni2019,
+  author    = {Abeni, Luca and Faggioli, Dario},
+  booktitle = {2019 IEEE 22nd International Symposium on Real-Time Distributed Computing (ISORC)},
+  title     = {An Experimental Analysis of the Xen and KVM Latencies},
+  year      = {2019},
+  volume    = {},
+  number    = {},
+  pages     = {18-26},
+  keywords  = {Kernel;Virtual machine monitors;Real-time systems;Task analysis;Scheduling algorithms;Hardware;Real-Time;Virtualization;Xen;kvm},
+  doi       = {10.1109/ISORC.2019.00014}
+}
+
+@article{abeni2020,
+  title    = {Using Xen and KVM as real-time hypervisors},
+  journal  = {Journal of Systems Architecture},
+  volume   = {106},
+  pages    = {101709},
+  year     = {2020},
+  issn     = {1383-7621},
+  doi      = {https://doi.org/10.1016/j.sysarc.2020.101709},
+  url      = {https://www.sciencedirect.com/science/article/pii/S1383762120300035},
+  author   = {Luca Abeni and Dario Faggioli},
+  keywords = {Real-Time, Virtualisation, Xen, KVM},
+  abstract = {The recent developments in virtualisation technologies have made feasible the execution of complex and performance-critical applications in virtual machines. Some of such applications are characterised by real-time constraints and require a predictable scheduling of virtual machines on physical cores, hence several works in real-time literature have proposed advanced scheduling and design techniques to respect the application constraints. This paper complements those works, investigating the latencies introduced by two of the most widely used open-source hypervisors, Xen and KVM. Some guidelines for properly configuring the VMs in order to reduce the introduced latencies (so that previous theoretical analysis and algorithms can be used in practice) are also provided, showing that both KVM and Xen are usable as real-time hypervisors.}
+}
+
+@article{abeni2024,
+  title    = {Virtualized real-time workloads in containers and virtual machines},
+  journal  = {Journal of Systems Architecture},
+  volume   = {154},
+  pages    = {103238},
+  year     = {2024},
+  issn     = {1383-7621},
+  doi      = {https://doi.org/10.1016/j.sysarc.2024.103238},
+  url      = {https://www.sciencedirect.com/science/article/pii/S1383762124001759},
+  author   = {Luca Abeni},
+  keywords = {Real-time computing, Virtual machines, Containers, Operating systems, Unikernels},
+  abstract = {Real-time virtualization is currently a hot topic, and there is much ongoing research on real-time Virtual Machines and hypervisors. However, most of the previous research focused either on reducing the latencies introduced by the virtualization stack (hypervisor, host Operating System, Virtual Machine scheduling, etc...) or analyzing the virtual CPU scheduling algorithms. Only a few works investigated the impact of the guest Operating System architecture on real-time performance or considered multiple performance metrics (latency, schedulability, startup times, resource consumption) at the same time. This paper compares various features of different virtualization technologies and guest Operating Systems, evaluating their suitability for serving real-time applications. The results indicate that solutions based on KVM (and an appropriate microvm) and the OSv unikernel can be considered viable alternatives to more traditional VMs or containers.}
+}
+
+@article{cinque2024,
+  title    = {Temporal isolation assessment in virtualized safety-critical mixed-criticality systems: A case study on Xen hypervisor},
+  journal  = {Journal of Systems and Software},
+  volume   = {216},
+  pages    = {112147},
+  year     = {2024},
+  issn     = {0164-1212},
+  doi      = {https://doi.org/10.1016/j.jss.2024.112147},
+  url      = {https://www.sciencedirect.com/science/article/pii/S0164121224001924},
+  author   = {Marcello Cinque and Luigi {De Simone} and Daniele Ottaviano},
+  keywords = {Virtualization, Temporal isolation, Dependability, Xen, ARM, Software certification, Railway, EN50128},
+  abstract = {Today, we are witnessing the increasing use of the cloud and virtualization technologies, which are a prominent way for the industry to develop mixed-criticality systems (MCSs) and reduce SWaP-C factors (size, weight, power, and cost) by flexibly consolidating multiple critical and non-critical software on the same System-on-a-Chip (SoC). Unfortunately, using virtualization leads to several issues in assessing isolation aspects, especially temporal behaviors, which must be evaluated due to safety-related standards (e.g., EN50128 in the railway domain). This study proposes a systematic approach for verifying temporal isolation properties in virtualized MCSs to characterize and mitigate timing failures, which is a fundamental aspect of dependability. In particular, as proof of the effectiveness of our proposal, we exploited the real-time flavor of Xen hypervisor used to deploy a virtualized 2 out of 2-based MCS scenario provided in the framework of an academic-industrial partnership, in the context of the railway domain. The results point out that virtualization overhead must be carefully tuned in a real industrial scenario according to the several features provided by a specific hypervisor solution. Further, we identify a set of directions toward employing virtualization in industry in the context of ARM-based mixed-criticality systems.}
+}
+
+@inproceedings{taclebench,
+  author    = {Heiko Falk and Sebastian Altmeyer and Peter Hellinckx and Bj{\"o}rn
+               Lisper and Wolfgang Puffitsch and Christine Rochange and Martin Schoeberl
+               and Rasmus Bo S{\o}rensen and Peter W{\"a}gemann and Simon Wegener},
+  title     = {{TACLeBench}: A Benchmark Collection to Support Worst-Case Execution
+               Time Research},
+  booktitle = {16th International Workshop on Worst-Case Execution Time Analysis
+               (WCET 2016)},
+  year      = {2016},
+  editor    = {Martin Schoeberl},
+  volume    = {55},
+  series    = {OpenAccess Series in Informatics (OASIcs)},
+  pages     = {2:1--2:10},
+  address   = {Dagstuhl, Germany},
+  publisher = {Schloss Dagstuhl--Leibniz-Zentrum f\"ur Informatik}
+}
+
+\bibitem{kuenzer2021}
+S.~Kuenzer \emph{et al.},
+``Unikraft: Fast, Specialized Unikernels the Easy Way,''
+in \emph{Proc.\ 16th ACM EuroSys}, 2021.
+\url{https://unikraft.org/docs}.

@@ -1,0 +1,741 @@
+\section{Experimental Setup}
+\label{sec:setup}
+
+This chapter outlines the complete experimental testbed configuration
+required to evaluate Xen and KVM under mixed-criticality workloads. To
+ensure reliable, predictable, and reproducible latency measurements, the
+host environment must be strictly tailored for real-time execution.
+
+The following sections detail the step-by-step preparation of the
+system, starting with the installation and tuning of the host operating
+system, the compilation of a fully preemptible Linux kernel
+(\texttt{PREEMPT\_RT}), and the deployment of the respective
+hypervisors. We then detail both hypervisors' configuration, focusing on
+the differences between the two.
+
+\subsection{Kernel configuration and real-time
+tuning}\label{kernel-configuration-and-real-time-tuning}
+
+To establish a baseline for our performance comparison, we also required
+the standard, non-real-time Linux kernel version 6.18.35.
+
+\begin{itemize}
+\item
+  First, we downloaded the official kernel source code from the
+  \href{https://cdn.kernel.org/pub/linux/kernel/}{Linux Kernel Archive}.
+\item
+  We extracted the archive using the following command:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{tar}\NormalTok{ {-}xzvf \textasciitilde{}/Downloads/linux{-}6.18.35.tar.gz {-}C \textasciitilde{}/}
+\end{Highlighting}
+\end{Shaded}
+\item
+  Next, we installed the necessary dependencies to build the kernel:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ apt {-}y install libncurses{-}dev gawk flex bison openssl libssl{-}dev dkms libelf{-}dev libudev{-}dev libpci{-}dev libiberty{-}dev autoconf llvm qtcreator qtbase5{-}dev qt5{-}qmake cmake}
+\end{Highlighting}
+\end{Shaded}
+\item
+  We navigated into the Linux build tree and copied the configuration
+  file from the currently running system:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\BuiltInTok{cd}\NormalTok{ \textasciitilde{}/linux{-}6.18.35}
+\FunctionTok{cp}\NormalTok{ /boot/config{-}}\VariableTok{$(}\FunctionTok{uname}\NormalTok{ {-}r}\VariableTok{)}\NormalTok{ .config}
+\end{Highlighting}
+\end{Shaded}
+\item
+  To fix potential configuration issues arising from the kernel version
+  mismatch, we updated the configuration:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{make}\NormalTok{ olddefconfig}
+\end{Highlighting}
+\end{Shaded}
+\item
+  To streamline the build by compiling only the currently loaded
+  modules, we ran:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{make}\NormalTok{ localmodconfig}
+\end{Highlighting}
+\end{Shaded}
+\end{itemize}
+
+\subsubsection{Patching Linux with
+PREEMPT\_RT}\label{patching-linux-with-preempt_rt}
+
+To achieve true real-time determinism after installation, we must move
+beyond the default \texttt{PREEMPT\_DYNAMIC} schema. While
+\texttt{PREEMPT\_DYNAMIC} allows the kernel to dynamically determine
+preemption modes (e.g., \emph{none}, \emph{voluntary}, or \emph{full}),
+it is not designed for real-time workloads and lacks hard guarantees for
+interrupt latency and thread scheduling.
+
+For the Real-Time kernel, we needed to follow some additional steps:
+
+\begin{itemize}
+\item
+  We downloaded the matching PREEMPT\_RT patch from the
+  \href{https://wiki.linuxfoundation.org/realtime/start}{Linux
+  Foundation Real-Time Wiki} and extracted it:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{gunzip}\NormalTok{ {-}c \textasciitilde{}/Downloads/patch{-}6.18.35{-}rt5.patch.gz }\OperatorTok{\textgreater{}}\NormalTok{ \textasciitilde{}/patch{-}6.18.35{-}rt5.patch}
+\end{Highlighting}
+\end{Shaded}
+\item
+  Returning to the build tree, we applied the patch and opened the
+  configuration GUI:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\BuiltInTok{cd}\NormalTok{ \textasciitilde{}/linux{-}6.18.35}
+\FunctionTok{patch}\NormalTok{ {-}p1 }\OperatorTok{\textless{}}\NormalTok{ ../patch{-}6.18.35{-}rt5.patch}
+\FunctionTok{make}\NormalTok{ xconfig}
+\end{Highlighting}
+\end{Shaded}
+\item
+  In the configuration menu, we navigated to General Setup
+  -\textgreater{} Preemption Model and set it to Fully Preemptible
+  Kernel (RT).
+\item
+  We opened the configuration menu again (\texttt{make\ xconfig}) to
+  manually disable specific features to reduce latency, strictly in the
+  following order:
+
+  \begin{itemize}
+  \item
+    \texttt{CONFIG\_SCHED\_MC\_PRIO} (\textbf{Processor type and
+    features} -\textgreater{} \textbf{Multi-core scheduler support})
+  \item
+    \texttt{CONFIG\_CPU\_FREQ} (\textbf{Power management and ACPI
+    options} -\textgreater{} \textbf{CPU Frequency scaling})
+  \item
+    \texttt{CONFIG\_STACKPROTECTOR}
+  \item
+    \texttt{CONFIG\_APM}
+  \item
+    \texttt{CONFIG\_ACPI\_PROCESSOR} (\textbf{Power management and ACPI
+    options} -\textgreater{} \textbf{ACPI (Advanced Configuration and
+    Power Interface)})
+  \item
+    \texttt{CONFIG\_CPU\_IDLE} (\textbf{Power management and ACPI
+    options} -\textgreater{} \textbf{CPU idle PM support})
+  \item
+    \textbf{Simultaneous Multi-threading} (if supported by the hardware)
+  \end{itemize}
+\item
+  We also ensured NVMe support was enabled:
+
+  \begin{itemize}
+  \item
+    \texttt{CONFIG\_BLK\_DEV\_NVME} (\textbf{Device Drivers}
+    -\textgreater{} \textbf{NVME Support} -\textgreater{} \textbf{NVM
+    Express block device})
+  \end{itemize}
+\item
+  Under \textbf{Processor type and features}, we fine-tuned the settings
+  for our specific hardware architecture and saved the configuration.
+\end{itemize}
+
+\subsubsection{Compiling the kernel}\label{compiling-the-kernel}
+
+\begin{itemize}
+\item
+  For Ubuntu specifically, it is necessary to clear the Canonical
+  certificates (\texttt{canonical.pem}) to avoid build failures. From
+  the Linux build tree, we executed:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ scripts/config {-}{-}disable SYSTEM\_TRUSTED\_KEYS}
+\FunctionTok{sudo}\NormalTok{ scripts/config {-}{-}disable SYSTEM\_REVOCATION\_KEYS}
+\FunctionTok{make}\NormalTok{ olddefconfig}
+\end{Highlighting}
+\end{Shaded}
+\item
+  Finally, we built and installed the kernel and its modules:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ make {-}j25}
+\FunctionTok{sudo}\NormalTok{ make modules\_install}
+\FunctionTok{sudo}\NormalTok{ make install}
+\end{Highlighting}
+\end{Shaded}
+
+    \subsubsection{Hardware Tuning
+  (BIOS/UEFI)}\label{hardware-tuning-biosuefi}
+\end{itemize}
+
+The configurations in this section are highly hardware-specific and will
+vary depending on the motherboard manufacturer and CPU vendor. To ensure
+predictable performance and minimize latency spikes for real-time
+workloads, it is crucial to disable dynamic frequency scaling and deep
+power-saving states directly at the firmware level.
+
+Below are the specific configuration steps applied to our testbed, which
+features an MSI motherboard and an AMD processor:
+
+\begin{itemize}
+\item
+  \textbf{Disable Precision Boost Overdrive (PBO):} Navigate to
+  \texttt{Overclocking} -\textgreater{}
+  \texttt{Advanced\ CPU\ Configuration} -\textgreater{}
+  \texttt{AMD\ Overclocking} and set \textbf{Precision Boost Overdrive}
+  to \textbf{Disabled}.
+\item
+  \textbf{Disable CPU Boost and Sleep States:} Navigate to
+  \texttt{Overclocking} -\textgreater{}
+  \texttt{Advanced\ CPU\ Configuration} -\textgreater{}
+  \texttt{AMD\ CBS} and set both \textbf{Core Performance Boost} and
+  \textbf{Global C-state Control} to \textbf{Disabled}.
+\item
+  \textbf{Set a Fixed CPU Frequency:} In the main \texttt{Overclocking}
+  menu, change the \textbf{CPU Ratio} from \texttt{Auto} to a fixed
+  value of \textbf{44.00}. This forces the processor to run at a
+  constant clock speed, preventing the latency overhead associated with
+  dynamic frequency transitions during the experiments.
+\end{itemize}
+
+\subsubsection{OS-level isolation}\label{os-level-isolation}
+
+Given the presence of some counterintuitive results, we decided to
+configure the operating system to adopt additional isolation mechanisms,
+aiming to identify the possible cause of such behaviors by minimizing
+the variables introduced by the OS scheduler.
+
+\paragraph{Isolation and Configuration
+Steps}\label{isolation-and-configuration-steps}
+
+The isolation was implemented at the operating system level through
+various techniques, including:
+
+\begin{itemize}
+\item
+  \textbf{Kernel scheduling isolation (\texttt{isolcpus}):} Use the
+  \texttt{isolcpus=} boot parameter to prevent the scheduler from
+  assigning tasks to a specific set of CPUs, thereby avoiding general
+  SMP balancing.
+\item
+  \textbf{Kernel house-keeping noise (\texttt{nohz\_full}):} Address
+  kernel house-keeping noise by appending \texttt{nohz\_full=} to enable
+  Tickless Mode, which reduces OS overhead on those selected CPUs.
+\item
+  \textbf{RCU callback offloading (\texttt{rcu\_nocbs}):} To further
+  minimize latencies imposed by memory allocators in \texttt{softirq}
+  contexts, apply RCU callback offloading to dedicated kernel threads
+  using the \texttt{rcu\_nocbs=} parameter.
+\item
+  \textbf{IRQ affinity:} Configure IRQ affinity to ensure hardware
+  interrupts are kept away from our isolated cores as much as possible.
+\end{itemize}
+
+The isolation was applied to both the host and the virtualized
+environment. The host system was configured to avoid scheduling tasks on
+the physical CPUs dedicated to running the virtual machines.
+Concurrently, the guest system was also configured so that the virtual
+machine's scheduler could not assign tasks to the cores reserved for
+real-time applications.
+
+The following is an example of OS-level isolation we adopted in one of
+the KVM experiments. On the host, we fully isolated \textbf{CPU22} and
+\textbf{CPU23} on our 24-core system, configuring GRUB by adding a
+custom boot entry in \texttt{/etc/grub.d/40\_custom}:
+
+\begin{Verbatim}[breaklines=true,breakanywhere=true]
+menuentry 'Ubuntu 24.04 (6.18.35-rt5-full)'{
+        echo 'Loading Linux 6.18.35-rt5 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on [22, 23]'
+        linux   /boot/vmlinuz-6.18.35-rt5 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=22-23 isolcpus=22-23 rcu_nocbs=22-23 irqaffinity=0-21 quiet splash $vt_handoff
+        echo    'Loading initial ramdisk ...'
+        initrd  /boot/initrd.img-6.18.35-rt5
+}
+\end{Verbatim}
+
+Similarly, on the guest we isolated \textbf{CPU1} with the following
+configuration:
+
+\begin{Verbatim}[breaklines=true,breakanywhere=true]
+menuentry 'Ubuntu 24.04 (6.18.35-rt5-full)'{
+        echo 'Loading Linux 6.18.35-rt5 with NO_HZ, ISOLCPUS, RCU_NOCBS and no IRQ_AFFINITY on 1'
+        linux   /boot/vmlinuz-6.18.35-rt5 root=UUID=1fe78ac9-040a-4fe5-b3a8-8715d38d692e ro  nohz_full=1 isolcpus=1 rcu_nocbs=1 irqaffinity=0 quiet splash $vt_handoff
+        echo    'Loading initial ramdisk ...'
+        initrd  /boot/initrd.img-6.18.35-rt5
+}
+\end{Verbatim}
+
+\subsection{KVM}\label{kvm}
+
+Being effectively treated as a Type-2 hypervisor, KVM sits on top of an
+already booted operating system. The host OS manages it similarly to a
+user-space application, where the virtual CPUs (vCPUs) are scheduled as
+standard host processes. Consequently, the installation process is as
+straightforward as running the following command:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ apt {-}y install bridge{-}utils cpu{-}checker libvirt{-}clients libvirt{-}daemon qemu{-}system qemu{-}kvm virt{-}manager numad}
+\end{Highlighting}
+\end{Shaded}
+
+We installed QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.17)
+
+In order to apply the OS-level isolation techniques on the pinned
+configuration, we modified the \texttt{/etc/grub.d/40\_custom} file
+adding the entries in the \href{KVM/grub_cfg/40_custom_host}{GRUB host
+configuration}.
+
+Once the installation was complete, we provisioned the following guest
+Virtual Machines with the same hardware specifications:
+
+\begin{table*}
+\centering
+\caption{KVM Virtual Machines Configuration}
+\label{tab:setup:kvm-vms}
+\begin{tabularx}{\linewidth}{@{}YYY@{}}
+\toprule
+Name & ubuntu24.04 & ubuntu24.04-pinned\tabularnewline
+\midrule
+\textbf{vCPUs:} & 2 & 2\tabularnewline
+\textbf{RAM:} & 4 GB & 4 GB\tabularnewline
+\textbf{Isolation techniques} & Memory locking, CPU pass-through & CPU pinning, memory locking, CPU pass-through, OS-level isolation\tabularnewline
+\textbf{Configuration file} & \href{KVM/vms/ubuntu24.04.xml}{ubuntu24.04.xml} & \href{KVM/vms/ubuntu24.04-pinned.xml}{ubuntu24.04-pinned.xml}\tabularnewline
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+We installed both the 6.18.35 and the 6.18.35-rt5 kernels in the same
+manner as on the host, with the exception that we did not enable the
+NVMe block device support, since we will be using VirtIO. For simplicity
+reasons, the two VMs share the same virtual drive.
+
+In order to apply the OS-level isolation techniques on the pinned
+configuration, we modified the \texttt{/etc/grub.d/40\_custom} file
+adding the entries in the \href{KVM/grub_cfg/40_custom_guest}{GRUB guest
+configuration}.
+
+We ensured the VM vCPUs always had the required resources available and
+could not be preempted by other tasks by setting the \texttt{vcpusched}
+mode of both vCPUs to \texttt{SCHED\_FIFO} with priority 98.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{\textless{}vcpusched}\OtherTok{ vcpus=}\StringTok{\textquotesingle{}0\textquotesingle{}}\OtherTok{ scheduler=}\StringTok{\textquotesingle{}fifo\textquotesingle{}}\OtherTok{ priority=}\StringTok{\textquotesingle{}98\textquotesingle{}}\KeywordTok{/\textgreater{}}
+\KeywordTok{\textless{}vcpusched}\OtherTok{ vcpus=}\StringTok{\textquotesingle{}1\textquotesingle{}}\OtherTok{ scheduler=}\StringTok{\textquotesingle{}fifo\textquotesingle{}}\OtherTok{ priority=}\StringTok{\textquotesingle{}98\textquotesingle{}}\KeywordTok{/\textgreater{}}
+\end{Highlighting}
+\end{Shaded}
+
+We enabled memory locking to prevent swapping:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{\textless{}memoryBacking\textgreater{}}
+  \KeywordTok{\textless{}locked/\textgreater{}}
+\KeywordTok{\textless{}/memoryBacking\textgreater{}}
+\end{Highlighting}
+\end{Shaded}
+
+We ensured CPU pass-through and correct topology mapping:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{\textless{}cpu}\OtherTok{ mode=}\StringTok{\textquotesingle{}host{-}passthrough\textquotesingle{}}\OtherTok{ check=}\StringTok{\textquotesingle{}none\textquotesingle{}}\KeywordTok{\textgreater{}}
+  \KeywordTok{\textless{}topology}\OtherTok{ sockets=}\StringTok{\textquotesingle{}1\textquotesingle{}}\OtherTok{ dies=}\StringTok{\textquotesingle{}1\textquotesingle{}}\OtherTok{ cores=}\StringTok{\textquotesingle{}2\textquotesingle{}}\OtherTok{ threads=}\StringTok{\textquotesingle{}1\textquotesingle{}}\KeywordTok{/\textgreater{}}
+\KeywordTok{\textless{}/cpu\textgreater{}}
+\end{Highlighting}
+\end{Shaded}
+
+In the pinned configuration, we applied CPU pinning to make the vCPU
+threads run exactly on the isolated cores:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{\textless{}vcpu}\OtherTok{ placement=}\StringTok{\textquotesingle{}static\textquotesingle{}}\KeywordTok{\textgreater{}}\NormalTok{2}\KeywordTok{\textless{}/vcpu\textgreater{}}
+\KeywordTok{\textless{}cputune\textgreater{}}
+  \KeywordTok{\textless{}vcpupin}\OtherTok{ vcpu=}\StringTok{\textquotesingle{}0\textquotesingle{}}\OtherTok{ cpuset=}\StringTok{\textquotesingle{}22\textquotesingle{}}\KeywordTok{/\textgreater{}}
+  \KeywordTok{\textless{}vcpupin}\OtherTok{ vcpu=}\StringTok{\textquotesingle{}1\textquotesingle{}}\OtherTok{ cpuset=}\StringTok{\textquotesingle{}23\textquotesingle{}}\KeywordTok{/\textgreater{}} 
+  \KeywordTok{\textless{}emulatorpin}\OtherTok{ cpuset=}\StringTok{\textquotesingle{}0{-}21\textquotesingle{}}\KeywordTok{/\textgreater{}}
+  \KeywordTok{\textless{}iothreadpin}\OtherTok{ iothread=}\StringTok{\textquotesingle{}1\textquotesingle{}}\OtherTok{ cpuset=}\StringTok{\textquotesingle{}0{-}21\textquotesingle{}}\KeywordTok{/\textgreater{}}
+\KeywordTok{\textless{}/cputune\textgreater{}}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{TACLe Benchmark}\label{tacle-benchmark}
+
+We provisioned the following guest Virtual Machines to run the TACLe
+benchmarks:
+
+\begin{table*}
+\centering
+\caption{TACLe Benchmark VMs Configuration (KVM)}
+\label{tab:setup:kvm-tacle}
+\begin{tabularx}{\linewidth}{@{}YYY@{}}
+\toprule
+Name & ubuntu24.04-tacle & ubuntu24.04-tacle-pinned\tabularnewline
+\midrule
+\textbf{vCPUs:} & 2 & 2\tabularnewline
+\textbf{RAM:} & 4 GB & 4 GB\tabularnewline
+\textbf{Isolation techniques} & Memory locking, CPU pass-through & CPU pinning, memory locking, CPU pass-through, OS-level isolation\tabularnewline
+\textbf{Configuration file} & \href{KVM/vms/ubuntu24.04-tacle.xml}{ubuntu24.04-tacle.xml} & \href{KVM/vms/ubuntu24.04-tacle-pinned.xml}{ubuntu24.04-tacle-pinned.xml}\tabularnewline
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+We configured them the same way we did for the \texttt{ubuntu24.04} and
+\texttt{ubuntu24.04-pinned} VMs respectively, with the exception of the
+pinning layout of the emulation and I/O threads. These four also share
+the same virtual drive, since only one of them will be turned on at a
+time.
+
+For the noisy guests, we provisioned similar VMs, but with different
+specs and no real-time vCPU priority assigned:
+
+\begin{table*}
+\centering
+\caption{Noisy Guest VMs Configuration (KVM)}
+\label{tab:setup:kvm-noisy}
+\begin{tabularx}{\linewidth}{@{}YYYY@{}}
+\toprule
+Name & ubuntu24.04-noise-small & ubuntu24.04-noise-big & ubuntu24.04-noise-big-pinned\tabularnewline
+\midrule
+\textbf{vCPUs:} & 2 & 16 & 16\tabularnewline
+\textbf{RAM:} & 4 GB & 16 GB & 16 GB\tabularnewline
+\textbf{Isolation techniques} & Memory locking, CPU pass-through & Memory locking, CPU pass-through & CPU pinning, memory locking, CPU pass-through\tabularnewline
+\textbf{Configuration file} & \href{KVM/vms/ubuntu24.04-noise-small.xml}{ubuntu24.04-noise-small.xml} & \href{KVM/vms/ubuntu24.04-noise-big.xml}{ubuntu24.04-noise-big.xml} & \href{KVM/vms/ubuntu24.04-noise-big-pinned.xml}{ubuntu24.04-noise-big-pinned.xml}\tabularnewline
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+These three also share a different virtual drive, that does not require
+any modification but the installation of \texttt{stress-ng}:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ apt {-}y install stress{-}ng}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{Xen}\label{xen}
+
+We installed the Xen hypervisor 4.17.3 via the
+\texttt{xen-hypervisor-amd64} package. This process automatically
+generated the necessary GRUB bootloader entries to boot the Ubuntu
+system as \textbf{Dom0} (the privileged management domain).
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ apt {-}y install xen{-}hypervisor{-}amd64}
+\end{Highlighting}
+\end{Shaded}
+
+During our initial boot tests, we encountered severe instability with
+the Graphical User Interface (GUI). Specifically, the \texttt{nouveau}
+open-source drivers---often relied upon for NVIDIA GPU
+compatibility---failed to initialize correctly on our testbed. Further
+investigation suggested that graphical drivers generally exhibit poor
+stability when running under Xen Dom0, a behavior observed across
+different hardware configurations. To bypass this limitation, we opted
+for a headless setup and managed the host via SSH.
+
+To streamline the provisioning of subsequent DomUs, we installed the
+\texttt{xen-tools} package:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ apt {-}y install xen{-}tools}
+\end{Highlighting}
+\end{Shaded}
+
+Since our guests required dedicated block storage, we resized the
+existing LVM (Logical Volume Manager) partition hosting the Ubuntu
+installation to carve out a new logical volume exclusively dedicated to
+the VMs. We performed this using the following steps:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ lvreduce {-}{-}resizefs {-}{-}size {-}65G /dev/ubuntu{-}vg/root}
+\FunctionTok{sudo}\NormalTok{ lvcreate {-}L 65G {-}n ubuntu{-}24.04{-}domU ubuntu{-}vg}
+\end{Highlighting}
+\end{Shaded}
+
+To speed up the setup of the DomU, we decided to clone the Dom0
+partition and assign it a new UUID:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ dd if=/dev/nvme0n1p4 of=/dev/ubuntu{-}vg/ubuntu{-}24.04{-}domU status=progress}
+\FunctionTok{sudo}\NormalTok{ e2fsck {-}f /dev/ubuntu{-}vg/ubuntu{-}24.04{-}domU}
+\FunctionTok{sudo}\NormalTok{ tune2fs {-}U random /dev/ubuntu{-}vg/ubuntu{-}24.04{-}domU}
+\end{Highlighting}
+\end{Shaded}
+
+We designed different configuration files to provision our DomU
+instances, with the same hardware specifications. The differences
+between the configurations are the underlying kernel used to boot them
+and how vCPU allocation is performed.
+
+\begin{table*}
+\centering
+\caption{Xen DomU Configurations}
+\label{tab:setup:xen-domu}
+\begin{tabularx}{\linewidth}{@{}YYYYY@{}}
+\toprule
+Name & ubuntu-24.04-linux-6.18.35-nrt-hvm & ubuntu-24.04-linux-6.18.35-nrt-hvm-pinned & ubuntu-24.04-linux-6.18.35-rt5-hvm & ubuntu-24.04-linux-6.18.35-rt5-hvm-pinned\tabularnewline
+\midrule
+\textbf{vCPUs:} & 2 & 2 & 2 & 2\tabularnewline
+\textbf{RAM:} & 4 GB & 4 GB & 4 GB & 4 GB\tabularnewline
+\textbf{Isolation techniques} & None & CPU pinning & None & CPU pinning\tabularnewline
+\textbf{Configuration file} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-nrt-hvm.conf}{ubuntu-24.04-linux-6.18.35-nrt-hvm.conf} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-nrt-hvm-pinned.conf}{ubuntu-24.04-linux-6.18.35-nrt-hvm-pinned.conf} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-hvm.conf}{ubuntu-24.04-linux-6.18.35-rt5-hvm.conf} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-hvm-pinned.conf}{ubuntu-24.04-linux-6.18.35-rt5-hvm-pinned.conf}\tabularnewline
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+These different configurations share the same LVM partition, as only one
+of them will be turned on at a time.
+
+\subsubsection{Problems with
+PREEMPT\_RT}\label{problems-with-preempt_rt}
+
+During the initial setup phase, we attempted to boot Xen using the same
+real-time kernel---compiled with the previously described
+instructions---as the Dom0 kernel. We tested various kernel versions
+across different Linux distributions and experimented with several
+combinations of the tuning parameters mentioned earlier (specifically:
+\texttt{CONFIG\_SCHED\_MC\_PRIO}, \texttt{CONFIG\_CPU\_FREQ},
+\texttt{CONFIG\_STACKPROTECTOR}, \texttt{CONFIG\_APM},
+\texttt{CONFIG\_ACPI\_PROCESSOR}, and \texttt{CONFIG\_CPU\_IDLE}).
+
+Furthermore, we applied a wide array of Xen and kernel command-line boot
+parameters that are traditionally recommended for resolving boot hangs
+and hardware initialization issues. However, none of these mitigations
+proved successful.
+
+We also ensured that all the necessary configuration flags required to
+run the kernel as a Xen Dom0 were strictly enabled. We tried:
+
+\begin{itemize}
+\item
+  \texttt{swiotlb=35536,force}
+\item
+  \texttt{iommu=pt}
+\item
+  \texttt{console=hvc0}
+\item
+  \texttt{console=tty0}
+\item
+  \texttt{earlyprintk=xen}
+\item
+  \texttt{apci=off\ noapic\ pci=nomsi}
+\item
+  \texttt{noirqbalance}
+\item
+  \texttt{nomodeset}
+\end{itemize}
+
+Despite these extensive troubleshooting efforts, we observed that
+enabling the ``Fully Preemptible Kernel (RT)'' option consistently
+caused severe boot incompatibilities with the Xen hypervisor. The boot
+sequence systematically stalled even before the initialization of the
+logging daemons (such as \texttt{systemd-journald}).
+
+Coupled with the graphical driver issues discussed previously, debugging
+this behavior proved to be a formidable challenge. The system most
+likely dropped into an \texttt{initramfs} recovery shell, which remained
+completely inaccessible to us in our headless setup.
+
+Consequently, we decided to leave the ``Fully Preemptible Kernel''
+option disabled for the Dom0 kernel. Instead, we opted for the
+``Low-Latency'' scheduling model, which guaranteed a reliable boot
+process while still offering better responsiveness compared to the
+standard generic kernel.
+
+\subsubsection{Resource partitioning and
+NULL-scheduler}\label{resource-partitioning-and-null-scheduler}
+
+In order to compare the effects of the scheduler choice on Xen, we
+swapped the default Credit2 scheduler with a pinned configuration,
+effectively using an offline scheduler. This is done to assess the
+current effects of the issues identified by the previous analyses of
+Abeni and Faggioli, such as the priority inversion via QEMU and the
+\texttt{TIMER\_SLOP} limitation. In order to do so, we changed the Dom0
+GRUB boot configuration at \texttt{/etc/grub.d/40\_custom} adding the
+entries shown in \href{Xen/grub_cfg/40_custom}{this GRUB configuration
+file}.
+
+This configuration restricts Xen to using only the first 22 pCPUs for
+Dom0. Also, we configured the pinned guests to use only the pCPUs 22 and
+23, so that they would have two dedicated cores with no interference
+from the Dom0.
+
+To be absolutely certain of the vCPU to pCPU fixed mapping, we also
+executed the following commands after the VM booted:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ xl vcpu{-}pin ubuntu{-}24.04{-}linux{-}6.18.35{-}rt5 0 22}
+\FunctionTok{sudo}\NormalTok{ xl vcpu{-}pin ubuntu{-}24.04{-}linux{-}6.18.35{-}rt5 1 23}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{TACLe Benchmark}\label{tacle-benchmark-1}
+
+For the TACLe benchmarks, we used the Low-Latency Dom0 and Real-Time
+DomU setup, and pinned Dom0 to only use the first four pCPUs, leaving
+the others to both the noisy guest and the benchmark guest. This is to
+separate the cores dedicated to the privileged domain from the other
+guests, ensuring that only stress generated by the benchmarks and the
+noisy VM is reflected in the results.
+
+We designed the following configurations to run the TACLe benchmarks:
+
+\begin{table*}
+\centering
+\caption{TACLe Benchmark Configurations (Xen)}
+\label{tab:setup:xen-tacle}
+\begin{tabularx}{\linewidth}{@{}YYY@{}}
+\toprule
+Name & ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle & ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle-pinned\tabularnewline
+\midrule
+\textbf{vCPUs:} & 2 & 2\tabularnewline
+\textbf{RAM:} & 4 GB & 4 GB\tabularnewline
+\textbf{Isolation techniques} & CPU scheduling range (4-23) & CPU pinning\tabularnewline
+\textbf{Configuration file} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle.conf}{ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle.conf} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle-pinned.conf}{ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle-pinned.conf}\tabularnewline
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+The only difference between these configurations and the previous ones
+is the range the vCPUs will be scheduled in. These too share the same
+LVM partition assigned to the other DomUs.
+
+For the noisy guests, we defined similar configurations, but with
+different specs:
+
+\begin{table*}
+\centering
+\caption{Noisy Guest Configurations (Xen)}
+\label{tab:setup:xen-noisy}
+\begin{tabularx}{\linewidth}{@{}YYYY@{}}
+\toprule
+Name & ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-small & ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big & ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big-pinned\tabularnewline
+\midrule
+\textbf{vCPUs:} & 2 & 16 & 16\tabularnewline
+\textbf{RAM:} & 4 GB & 16 GB & 16 GB\tabularnewline
+\textbf{Isolation techniques} & CPU scheduling range (4-23) & CPU scheduling range (4-23) & CPU pinning\tabularnewline
+\textbf{Configuration file} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-small.conf}{ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-small.conf} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big.conf}{ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big.conf} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big-pinned.conf}{ubuntu-24.04-linux-6.18.35-nrt-hvm-noisyguest-big-pinned.conf}\tabularnewline
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+These three also share a different LVM partition, that does not require
+any modification but the installation of \texttt{stress-ng}:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ apt {-}y install stress{-}ng}
+\end{Highlighting}
+\end{Shaded}
+
+\paragraph{TACLe and stress on Dom0}\label{tacle-and-stress-on-dom0}
+
+There is also a variation of the above configuration, where the stress
+is generated on Dom0 itself. In this case, there is no need to limit the
+scheduling range of the DomU. The configuration file is
+\href{Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-hvm-tacle-dom0noise.conf}{this
+one}. The pinned configuration, by definition, does not change.
+
+\subsubsection{PV and PVH DomUs}\label{pv-and-pvh-domus}
+
+To test different virtualization technologies, we created some PV and
+PVH configuration variants of the previous real-time DomUs. As we will
+discuss in the Xen analysis section, the PV DomUs don't support
+\texttt{PREEMPT\_RT} patched kernels with the Fully Preemptible Kernel
+option enabled (in a similar fashion to Dom0, it being a PV domain too),
+thus we used the Low-Latency variant of the kernel for these
+configurations:
+
+\begin{table*}
+\centering
+\caption{PV and PVH DomU Configurations}
+\label{tab:setup:xen-pvh}
+\begin{tabularx}{\linewidth}{@{}YYYYY@{}}
+\toprule
+Name & ubuntu-24.04-linux-6.18.35-rt5-ll-pv & ubuntu-24.04-linux-6.18.35-rt5-ll-pv-pinned & ubuntu-24.04-linux-6.18.35-rt5-pvh & ubuntu-24.04-linux-6.18.35-rt5-pvh-pinned\tabularnewline
+\midrule
+\textbf{vCPUs:} & 2 & 2 & 2 & 2\tabularnewline
+\textbf{RAM:} & 4 GB & 4 GB & 4 GB & 4 GB\tabularnewline
+\textbf{Isolation techniques} & None & CPU pinning & None & CPU pinning\tabularnewline
+\textbf{Configuration file} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-ll-pv.conf}{ubuntu-24.04-linux-6.18.35-rt5-ll-pv.conf} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-ll-pv-pinned.conf}{ubuntu-24.04-linux-6.18.35-rt5-ll-pv-pinned.conf} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-pvh.conf}{ubuntu-24.04-linux-6.18.35-rt5-pvh.conf} & \href{Xen/domains/ubuntu-24.04-linux-6.18.35-rt5-pvh-pinned.conf}{ubuntu-24.04-linux-6.18.35-rt5-pvh-pinned.conf}\tabularnewline
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+All these configurations use the same LVM partition as the other HVM
+configurations, and do not require any other specific setup.
+
+\subsection{Benchmark automation}\label{benchmark-automation}
+
+In order to streamline the testing procedure, a series of supplementary
+configuration steps were required. Since these procedures apply
+identically across both virtualization platforms, the following
+terminology will be used for simplicity: the term \textbf{Host} will
+refer collectively to the KVM Host and the Xen Dom0, while the term
+\textbf{Guest} will denote both the KVM virtual machine and the Xen
+DomU.
+
+First, we installed \texttt{openssh-server} and \texttt{expect} on the
+Host to orchestrate the benchmarks from a remote machine and interact
+with the Guest OS via the \texttt{xl} and \texttt{virsh} consoles.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ apt {-}y install openssh{-}server expect}
+\end{Highlighting}
+\end{Shaded}
+
+To enable passwordless SSH access, we generated an SSH key pair on the
+orchestrator machine and appended the public key to the
+\texttt{authorized\_keys} file on the Host:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{ssh{-}keygen}\NormalTok{ {-}t ed25519 {-}C }\StringTok{"xen{-}vs{-}kvm{-}orchestrator"}
+\ExtensionTok{ssh{-}copy{-}id}\NormalTok{ matt@192.168.1.166}
+\end{Highlighting}
+\end{Shaded}
+
+To facilitate operations requiring root privileges without manual
+intervention, we added the following rule to the \texttt{/etc/sudoers}
+file on the Host and Guests using \texttt{visudo}:
+
+\begin{Verbatim}[breaklines=true,breakanywhere=true]
+matt ALL=(ALL) NOPASSWD: ALL
+\end{Verbatim}
+
+To automatically boot on the appropriate kernel with the correct
+settings, we modified the GRUB configuration in
+\texttt{/etc/default/grub} on the Host and KVM Guests:
+
+\begin{Verbatim}[breaklines=true,breakanywhere=true]
+GRUB_DEFAULT=saved
+GRUB_TIMEOUT_STYLE=menu
+GRUB_TIMEOUT=5
+\end{Verbatim}
+
+For the KVM Guests, we enabled the serial console by enabling the
+corresponding \texttt{systemctl} service:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sudo}\NormalTok{ systemctl enable {-}{-}now serial{-}getty@ttyS0.service}
+\end{Highlighting}
+\end{Shaded}
