@@ -20,10 +20,10 @@ plt.rcParams.update({
 # Dizionario per mappare i file alle relative etichette
 # (assicurati di aver inserito tutti i kernel e le VM testate)
 test_files = {
-    Path('Xen/tests_noisy_domu/LL-4vcpu-pinned__guest-nrt-pinned-hvm.log'): 'LL4vcpu-GUEST_NRT PINNED',
-    Path('Xen/tests_noisy_domu/LL-4vcpu-pinned__guest-rt5-pinned-hvm.log'): 'LL4vcpu-GUEST_RT5 PINNED',
-    Path('Xen/tests_noisy_domu/NRT-4vcpu-pinned__guest-nrt-pinned-hvm.log'): 'NRT4vcpu-GUEST_NRT PINNED',
-    Path('Xen/tests_noisy_domu/NRT-4vcpu-pinned__guest-rt5-pinned-hvm.log'): 'NRT4vcpu-GUEST_RT5 PINNED'
+    Path('Xen/tests_TACLe/plots_nanosec/results_matrix1_baseline_nanosecond.log'): 'BASELINE',
+    Path('Xen/tests_TACLe/plots_nanosec/results_matrix1_smallnoise_nanosecond.log'): 'SMALL NOISE',
+    Path('Xen/tests_TACLe/plots_nanosec/results_matrix1_bignoise_nanosecond.log'): 'BIG NOISE',
+    Path('Xen/tests_TACLe/plots_nanosec/results_matrix1_bignoise_pinned_nanosecond.log'): 'BIG NOISE PINNED'
 }
  
 def load_histogram_data(filepath, config_name):
@@ -84,7 +84,7 @@ def main():
     # la distribuzione mantenendo visibili i picchi anomali
     ax.set_yscale('log')
  
-    plt.title('cyclic test latencies under stress from domU pinned', pad=20, fontweight='bold')
+    plt.title('matrix1 execution time on Xen', pad=20, fontweight='bold')
     plt.xlabel('System Configuration', labelpad=12)
     plt.ylabel(r'Latency ($\mu s$) [Log Scale]', labelpad=12)
  
@@ -92,7 +92,7 @@ def main():
     plt.tight_layout()
  
     # Salvataggio
-    output_filename = '4vcpu_hvm_pinned_boxplot.svg'
+    output_filename = 'xen_TACLe_matrix1_boxplot.svg'
     plt.savefig(output_filename, format='svg', bbox_inches='tight')
     plt.close()
     print(f"\n[OK] Boxplot salvato con successo: {output_filename}")
