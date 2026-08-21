@@ -83,6 +83,7 @@ For the Real-Time kernel, we needed to follow some additional steps:
   sudo make modules_install
   sudo make install
   ```
+
 ### Hardware Tuning (BIOS/UEFI)
 
 The configurations in this section are highly hardware-specific and will vary depending on the motherboard manufacturer and CPU vendor. To ensure predictable performance and minimize latency spikes for real-time workloads, it is crucial to disable dynamic frequency scaling and deep power-saving states directly at the firmware level. 
