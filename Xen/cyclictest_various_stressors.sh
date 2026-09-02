@@ -1,6 +1,17 @@
 #!/bin/bash
 
 # ==============================================================================
+# XEN CYCLICTEST WITH VARIOUS STRESSORS ORCHESTRATION SCRIPT
+#
+# Runs cyclictest inside a Xen HVM DomU with four distinct Dom0 stressor
+# scenarios (baseline / cache / interrupts / rawsock) on top of a persistent
+# CPU + VM stress-ng load.
+# Tested across all Dom0 kernel configurations (NRT / LL, non-pinned / pinned,
+# 22 vCPUs) with NRT and RT HVM guests.
+# Results land in: $RESULTS_DIR
+# ==============================================================================
+
+# ==============================================================================
 # CONFIGURATION
 # ==============================================================================
 

@@ -1,6 +1,21 @@
 #!/bin/bash
 
 # ==============================================================================
+# XEN TACLE BENCHMARK ORCHESTRATION SCRIPT
+#
+# Runs TACLe benchmarks inside a Xen HVM DomU (TACLe variant) while a noisy
+# DomU creates interference. Four experiment configurations:
+#   baseline         — TACLe VM (float) + small noisy VM, no stress
+#   small_noise      — TACLe VM + small noisy VM + light stress inside noisy VM
+#   big_noise        — TACLe VM + big noisy VM + heavy stress inside noisy VM
+#   big_noise_pinned — both VMs pinned + heavy stress inside noisy VM
+#
+# Dom0 kernel fixed to LL-RT (6.18.35-rt5-ll, 4 vCPUs + pinning).
+# Counterpart script : ../KVM/tacle_kvm.sh
+# Results land in   : $RESULTS_DIR
+# ==============================================================================
+
+# ==============================================================================
 # CONFIGURATION
 # ==============================================================================
 
