@@ -943,7 +943,7 @@ This phase of the evaluation investigates the determinism and worst-case executi
 | --- | --- | --- | --- | --- | --- |
 | **DEBIE** | 10,000 | 24,627 | 28,196 | 57,314 | 32,687 μs |
 | **huffenc** | 1,000,000 | 15 | 27 | 445 | 430 μs |
-| **lift** | 1,000,000 | 17 | 38 | 1,000 | 983 μs |
+| **lift** | 1,000,000 | 17 | 38 | 1,518 | 1,498 μs |
 | **matrix1** | 1,000,000 | 0 | 0 | 51 | 51 μs |
 | **test3** | 10,000 | 8,287 | 9,182 | 14,786 | 6,499 μs |
 
@@ -1036,7 +1036,7 @@ To quickly evaluate system stability, the following table exclusively reports th
 | --- | --- | --- | --- | --- |
 | **DEBIE** | 31,048 | 31,022 | 57,314 | 41,266 |
 | **huffenc** | 41 | 741 | 445 | 41 |
-| **lift** | 254 | 43 | 1,000 | 57 |
+| **lift** | 254 | 43 | 1,518 | 57 |
 | **matrix1** | 7 | 10 | 51 | 11 |
 | **test3** | 8,414 | 8,885 | 14,786 | 10,037 |
 
@@ -1075,7 +1075,7 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 | METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
 | :--- | :--- | :--- | :--- | :--- |
 | **Average ± SD** | 24464.53 ± 2225.55 ns | 20106.23 ± 1479.67 ns | 38136.97 ± 11983.88 ns | 20254.04 ± 2140.08 ns |
-| **WCET (Max)** | 253587 ns | 43321 ns | 999941 ns | 57119 ns |
+| **WCET (Max)** | 253587 ns | 43321 ns | 1518396 ns | 57119 ns |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 

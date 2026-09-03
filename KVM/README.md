@@ -570,8 +570,8 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 | METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
 | :--- | :--- | :--- | :--- | :--- |
-| **Mean ± SD** | 27214.36 ± 1303.61 µs | 28845.81 ± 3813.54 µs | 27221.56 ± 1304.61 µs | 27444.09 ± 1327.72 µs |
-| **WCET (Max)** | 32409 µs | 43849 µs | 30872 µs | 37284 µs |
+| **Mean ± SD** | 27214.36 ± 1303.61 µs | 27221.56 ± 1304.61 µs | 28845.81 ± 3813.54 µs | 27444.09 ± 1327.72 µs |
+| **WCET (Max)** | 32409 µs | 30872 µs | 43849 µs | 37284 µs |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: +5.99%
@@ -599,7 +599,7 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 | METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
 | :--- | :--- | :--- | :--- | :--- |
 | **Mean ± SD** | 20106.37 ± 2997.02 ns | 20113.88 ± 3034.06 ns | 21218.61 ± 4413.84 ns | 21259.27 ± 5273.76 ns |
-| **WCET (Max)** | 27169 ns | 54767 ns | 186424 ns | 69974 ns |
+| **WCET (Max)** | 57169 ns | 54767 ns | 186424 ns | 69974 ns |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 * Average Increment: +5.53%
