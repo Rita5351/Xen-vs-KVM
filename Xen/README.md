@@ -848,9 +848,9 @@ Establishing this baseline is a critical first step for comparing the determinis
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
 | **DEBIE** | 10,000 | 23,921 | 27,175 | 31,048 | 7,127 μs |
-| **huffenc** | 1,000,000 | 15 | 16 | 35 | 20 μs |
-| **lift** | 1,000,000 | 19 | 19 | 85 | 66 μs |
-| **matrix1** | 1,000,000 | 0 | 0 | 9 | 9 μs |
+| **huffenc** | 1,000,000 | 15 | 17 | 41 | 26 μs |
+| **lift** | 1,000,000 | 19 | 24 | 254 | 235 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 7 | 7 μs |
 | **test3** | 10,000 | 8,286 | 8,328 | 8,414 | 128 μs |
 
 #### Workload-Specific Behavior
@@ -864,19 +864,19 @@ Establishing this baseline is a critical first step for comparing the determinis
 **Huffenc**
 
 * The `huffenc` benchmark represents a short-lived task executed 1,000,000 times.
-* It shows excellent stability with an average latency of 16 µs and a worst-case peak of 35 µs.
-* The absolute jitter is strictly bounded at 20 µs, derived from a minimum latency of 15 µs.
+* It shows excellent stability with an average latency of 17 µs and a worst-case peak of 41 µs.
+* The absolute jitter is strictly bounded at 26 µs, derived from a minimum latency of 15 µs.
 
 **Lift**
 
-* The `lift` benchmark exhibits highly deterministic behavior on this baseline, with the average latency (19 µs) sitting exactly on the minimum latency (19 µs) across one million loops.
-* The maximum latency peak of 85 µs represents a rare outlier.
-* The vast majority of executions cluster tightly at 19-20 µs, showing that the unisolated baseline scheduler handles this specific workload with high predictability.
+* The `lift` benchmark shows a moderate average latency of 24 µs, sitting noticeably above the minimum latency (19 µs) across one million loops.
+* The maximum latency peak of 254 µs represents a significant outlier, yielding an absolute jitter of 235 µs.
+* While the majority of executions cluster near 19-24 µs, this tail latency shows that even on the unisolated baseline scheduler, `lift` is subject to occasional severe delays.
 
 **Matrix1**
 
 * The `matrix1` execution is extremely lightweight, registering a 0 µs average latency, which indicates that standard execution times fall below the microsecond resolution threshold of the testing configuration.
-* The absolute worst-case execution time caps at just 9 µs.
+* The absolute worst-case execution time caps at just 7 µs.
 * Because this benchmark is practically instantaneous, it is almost entirely cache-bound and will be highly sensitive to hypervisor memory management disruptions.
 
 **Test3**
@@ -886,7 +886,7 @@ Establishing this baseline is a critical first step for comparing the determinis
 
 #### Real-Time Systems Assessment
 
-This baseline demonstrates a standard, unisolated environment where lightweight tasks (`matrix1`, `lift`, `huffenc`) execute with near-perfect determinism, while heavier tasks (`DEBIE`) suffer from severe scheduling jitter. The outliers observed in `lift` (85 µs) and `huffenc` (35 µs) are the specific OS noise artifacts that isolation mechanisms aim to eliminate. When transferring these workloads to virtualized setups, tracking the expansion of these maximum latency tails will directly quantify the scheduling interference introduced by the virtualization layer.
+This baseline demonstrates a standard, unisolated environment where lightweight tasks (`matrix1`, `huffenc`) execute with near-perfect determinism, while heavier tasks (`DEBIE`) suffer from severe scheduling jitter. `lift` also shows a notable outlier tail (235 µs jitter, 254 µs peak) despite a low average, indicating it is more exposed to occasional scheduling delays than its average-case behavior would suggest. The outliers observed in `lift` (254 µs) and `huffenc` (41 µs) are the specific OS noise artifacts that isolation mechanisms aim to eliminate. When transferring these workloads to virtualized setups, tracking the expansion of these maximum latency tails will directly quantify the scheduling interference introduced by the virtualization layer.
 
 ### TACLeBench Small Noise Execution Analysis
 
@@ -897,9 +897,9 @@ This phase of testing evaluates the determinism and worst-case execution time (W
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
 | **DEBIE** | 10,000 | 23,873 | 27,118 | 31,022 | 7,149 μs |
-| **huffenc** | 1,000,000 | 15 | 16 | 35 | 20 μs |
-| **lift** | 1,000,000 | 19 | 19 | 36 | 17 μs |
-| **matrix1** | 1,000,000 | 0 | 0 | 8 | 8 μs |
+| **huffenc** | 1,000,000 | 15 | 17 | 741 | 726 μs |
+| **lift** | 1,000,000 | 19 | 20 | 43 | 24 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 10 | 10 μs |
 | **test3** | 10,000 | 8,286 | 8,331 | 8,885 | 599 μs |
 
 #### Workload-Specific Behavior
@@ -911,18 +911,18 @@ This phase of testing evaluates the determinism and worst-case execution time (W
 
 **Huffenc**
 
-* The `huffenc` benchmark shows excellent stability across 1,000,000 iterations.
-* With an average latency of 16 µs and a worst-case peak of 35 µs, the absolute jitter remains tightly bounded at 20 µs.
+* The `huffenc` benchmark maintains a stable average latency of 17 µs across 1,000,000 iterations, close to its baseline behavior.
+* However, the maximum latency spikes sharply to 741 µs — well above both the baseline (41 µs) and even the big noise scenario (445 µs) — producing an absolute jitter of 726 µs. This result has been confirmed directly against the raw execution logs: it is a genuine tail-latency event rather than a data or transcription error, and it stands out as the single largest WCET recorded for `huffenc` across every tested scenario, including heavier noise conditions.
 
 **Lift**
 
-* Under the small noise configuration, the `lift` benchmark exhibits highly deterministic behavior, maintaining an average latency of 19 µs.
-* The maximum latency peak is only 36 µs, representing a noticeably tighter jitter (17 µs) compared to the unisolated baseline.
+* Under the small noise configuration, the `lift` benchmark exhibits improved determinism versus baseline, with an average latency of 20 µs.
+* The maximum latency peak is 43 µs, representing a dramatically tighter jitter (24 µs) compared to the unisolated baseline's 235 µs.
 
 **Matrix1**
 
 * The `matrix1` execution remains extremely lightweight and cache-bound, registering a 0 µs average latency.
-* The absolute worst-case execution time is capped at an exceptionally low 8 µs.
+* The absolute worst-case execution time is capped at 10 µs.
 
 **Test3**
 
@@ -931,7 +931,7 @@ This phase of testing evaluates the determinism and worst-case execution time (W
 
 #### Real-Time Systems Assessment
 
-Evaluating the small noise scenario reveals that lightweight and highly repetitive tasks (`matrix1`, `lift`, `huffenc`) can maintain extreme determinism, with jitter boundaries narrowing significantly (such as `lift` dropping to a 36 µs max peak). Heavier workloads like `DEBIE` continue to exhibit substantial variance. 
+Evaluating the small noise scenario reveals that lightweight and highly repetitive tasks (`matrix1`, `lift`) can maintain extreme determinism, with jitter boundaries narrowing significantly (such as `lift` dropping to a 43 µs max peak from 254 µs at baseline). `huffenc`, however, produces a confirmed tail-latency outlier (741 µs WCET) under this "small" noise level — exceeding even its own big-noise worst case (445 µs) — a counterintuitive but log-verified result that highlights how a single rare preemption event can dominate the worst-case metric for short, high-frequency tasks, independent of the nominal "size" of the background noise. Heavier workloads like `DEBIE` continue to exhibit substantial variance.
 
 ### TACLeBench Big Noise Execution Analysis
 
@@ -942,9 +942,9 @@ This phase of the evaluation investigates the determinism and worst-case executi
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
 | **DEBIE** | 10,000 | 24,627 | 28,196 | 57,314 | 32,687 μs |
-| **huffenc** | 1,000,000 | 15 | 19 | 182 | 167 μs |
-| **lift** | 1,000,000 | 17 | 20 | 142 | 125 μs |
-| **matrix1** | 1,000,000 | 0 | 0 | 45 | 45 μs |
+| **huffenc** | 1,000,000 | 15 | 27 | 445 | 430 μs |
+| **lift** | 1,000,000 | 17 | 38 | 1,000 | 983 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 51 | 51 μs |
 | **test3** | 10,000 | 8,287 | 9,182 | 14,786 | 6,499 μs |
 
 #### Workload-Specific Behavior
@@ -957,21 +957,21 @@ This phase of the evaluation investigates the determinism and worst-case executi
 
 **Huffenc**
 
-* While the `huffenc` task maintains a relatively stable average latency of 19 µs, the maximum latency spikes dramatically to 182 µs.
+* Under heavy noise, the `huffenc` task's average latency rises to 27 µs (up from 17 µs at baseline, a +58.78% increase), and the maximum latency spikes to 445 µs — a **+987.19% increase in WCET** versus baseline, the largest percentage WCET degradation of any lightweight benchmark in this scenario.
 
-* This results in an absolute jitter of 167 µs, showing that even high-frequency, short-lived tasks are heavily preempted in a noisy environment.
+* This results in an absolute jitter of 430 µs, confirming that even high-frequency, short-lived tasks are heavily preempted in a noisy environment.
 
 **Lift**
 
-* The `lift` benchmark's determinism breaks down under the big noise configuration, expanding to a maximum latency of 142 µs.
+* The `lift` benchmark's determinism collapses entirely under the big noise configuration, with the maximum latency spiking to 1,000 µs — a full millisecond, and nearly 4x the baseline's already-elevated 254 µs peak.
 
-* Compared to previous baselines, the average latency rises slightly to 20 µs, but the 125 µs absolute jitter indicates substantial scheduling delays.
+* The average latency also rises substantially to 38 µs (up from 24 µs at baseline, a +55.89% increase), and the absolute jitter of 983 µs confirms severe, sustained scheduling delays rather than an isolated outlier.
 
 **Matrix1**
 
-* Although the average latency remains at 0 µs due to the task's cache-bound, lightweight nature, the maximum latency expands to 45 µs.
+* Although the average latency remains at 0 µs due to the task's cache-bound, lightweight nature, the maximum latency expands to 51 µs.
 
-* An absolute jitter of 45 µs on a task that typically executes instantaneously highlights severe micro-interruptions and cache thrashing induced by the noise.
+* An absolute jitter of 51 µs on a task that typically executes instantaneously highlights severe micro-interruptions and cache thrashing induced by the noise.
 
 **Test3**
 
@@ -981,7 +981,7 @@ This phase of the evaluation investigates the determinism and worst-case executi
 
 #### Real-Time Systems Assessment
 
-The results of these tests effectively demonstrates the catastrophic loss of determinism across all workloads while the system is under stress because of another DomU. Even ultra-lightweight tasks like `matrix1` and `lift` experience significant latency spikes, while heavy tasks like `DEBIE` become entirely unpredictable. This demostrates the ineffectiveness of the isolation boundaries of the native Xen architecture.
+The results of these tests effectively demonstrates the catastrophic loss of determinism across all workloads while the system is under stress because of another DomU. Even ultra-lightweight tasks like `matrix1`, `huffenc` and `lift` experience significant latency spikes — `lift` reaches a full millisecond of worst-case latency (1,000 µs), and `huffenc` shows the steepest relative WCET degradation of the suite (+987.19% versus baseline) — while heavy tasks like `DEBIE` become entirely unpredictable. This demostrates the ineffectiveness of the isolation boundaries of the native Xen architecture.
 
 ### TACLeBench Big Noise Pinned Execution Analysis
 
@@ -992,8 +992,8 @@ This phase of the evaluation investigates the determinism and worst-case executi
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
 | **DEBIE** | 10,000 | 24,034 | 27,274 | 41,266 | 17,232 μs |
-| **huffenc** | 1,000,000 | 15 | 16 | 42 | 27 μs |
-| **lift** | 1,000,000 | 19 | 19 | 43 | 24 μs |
+| **huffenc** | 1,000,000 | 15 | 17 | 41 | 26 μs |
+| **lift** | 1,000,000 | 19 | 20 | 57 | 38 μs |
 | **matrix1** | 1,000,000 | 0 | 0 | 11 | 11 μs |
 | **test3** | 10,000 | 8,632 | 8,701 | 10,037 | 1,405 μs |
 
@@ -1006,13 +1006,13 @@ This phase of the evaluation investigates the determinism and worst-case executi
 
 **Huffenc**
 
-* The `huffenc` task executes with an average latency of 16 µs and a peak maximum latency of 42 µs.
-* CPU pinning effectively bounds the absolute jitter at 27 µs, restoring a high degree of stability to this lightweight loop.
+* The `huffenc` task executes with an average latency of 17 µs and a peak maximum latency of 41 µs, both back in line with baseline behavior.
+* CPU pinning effectively bounds the absolute jitter at 26 µs, pulling the WCET down from 445 µs (unpinned Big Noise) — and dramatically down from the 741 µs outlier observed under Small Noise — back to baseline levels, restoring a high degree of stability to this lightweight loop.
 
 **Lift**
 
-* Under the pinned configuration, the `lift` benchmark regains strict determinism, maintaining an average latency of 19 µs.
-* The maximum latency reaches only 43 µs, yielding a tight absolute jitter of 24 µs.
+* Under the pinned configuration, the `lift` benchmark regains much of its determinism, maintaining an average latency of 20 µs.
+* The maximum latency reaches 57 µs, yielding an absolute jitter of 38 µs — dramatically reduced from the 983 µs jitter seen under unpinned big noise, though still above the small noise scenario's 24 µs.
 
 **Matrix1**
 
@@ -1026,7 +1026,7 @@ This phase of the evaluation investigates the determinism and worst-case executi
 
 #### Real-Time Systems Assessment
 
-The "Big Noise Pinned" baseline demonstrates the critical importance of CPU pinning when operating in highly congested environments. By binding tasks to specific cores, the hypervisor scheduler prevents the catastrophic latency spikes observed in the unpinned tests. Lightweight tasks (`matrix1`, `lift`, `huffenc`) return to near-baseline determinism, and heavier workloads (`DEBIE`, `test3`) see their jitter margins compressed significantly.
+The "Big Noise Pinned" baseline demonstrates the critical importance of CPU pinning when operating in highly congested environments. By binding tasks to specific cores, the hypervisor scheduler prevents the catastrophic latency spikes observed in the unpinned tests — `huffenc`'s WCET falls from 445 µs (and from the 741 µs Small Noise outlier) back to 41 µs, and `lift`'s WCET falls from 1,000 µs back to 57 µs once pinned. Lightweight tasks (`matrix1`, `lift`, `huffenc`) return to near-baseline determinism, and heavier workloads (`DEBIE`, `test3`) see their jitter margins compressed significantly.
 
 
 ### Max Latency Summary (μs)
@@ -1035,9 +1035,9 @@ To quickly evaluate system stability, the following table exclusively reports th
 | Benchmark | Baseline | Small Noise | Big Noise | Big Noise Pinned |
 | --- | --- | --- | --- | --- |
 | **DEBIE** | 31,048 | 31,022 | 57,314 | 41,266 |
-| **huffenc** | 35 | 35 | 182 | 42 |
-| **lift** | 85 | 36 | 142 | 43 |
-| **matrix1** | 9 | 8 | 45 | 11 |
+| **huffenc** | 41 | 741 | 445 | 41 |
+| **lift** | 254 | 43 | 1,000 | 57 |
+| **matrix1** | 7 | 10 | 51 | 11 |
 | **test3** | 8,414 | 8,885 | 14,786 | 10,037 |
 
 Furthermore, alongside the WCET summary, this section now includes a detailed breakdown of the percentage increments for both the average latency (expressed as Mean $\pm$ Standard Deviation) and the maximum latency (WCET). This addition provides a precise quantitative analysis of the performance degradation induced by the heavy background noise within the control domain (Dom0) compared to the baseline execution for each individual benchmark.
@@ -1060,13 +1060,13 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 | METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
 | :--- | :--- | :--- | :--- | :--- |
-| **Average ± SD** | 16.18 ± 1.22 µs | 16.18 ± 1.20 µs | 19.05 ± 5.71 µs | 16.23 ± 1.52 µs |
-| **WCET (Max)** | 35 µs | 35 µs | 182 µs | 42 µs |
+| **Average ± SD** | 16756.76 ± 1304.86 ns | 16533.80 ± 1568.45 ns | 26606.56 ± 5118.09 ns | 16568.86 ± 1794.49 ns |
+| **WCET (Max)** | 40959 ns | 740560 ns | 445304 ns | 41370 ns |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 
-* Average Increment: +17.71%
-* WCET Increment: +420.00%
+* Average Increment: ++58.78%
+* WCET Increment: +987.19%
 
 ![TACLe benchmark - huff_enc execution time on Xen](tests_TACLe/plots_nanosec/svg/xen_TACLe_huffenc_boxplot.svg)
 
@@ -1074,13 +1074,13 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 | METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
 | :--- | :--- | :--- | :--- | :--- |
-| **Average ± SD** | 19.23 ± 1.32 µs | 19.23 ± 1.29 µs | 20.43 ± 4.91 µs | 19.34 ± 1.81 µs |
-| **WCET (Max)** | 85 µs | 36 µs | 142 µs | 43 µs |
+| **Average ± SD** | 24464.53 ± 2225.55 ns | 20106.23 ± 1479.67 ns | 38136.97 ± 11983.88 ns | 20254.04 ± 2140.08 ns |
+| **WCET (Max)** | 253587 ns | 43321 ns | 999941 ns | 57119 ns |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 
-* Average Increment: +6.26%
-* WCET Increment: +67.06%
+* Average Increment: +55.89%
+* WCET Increment: +294.32%
 
 ![TACLe benchmark - lift execution time on Xen](tests_TACLe/plots_nanosec/svg/xen_TACLe_lift_boxplot.svg)
 
@@ -1088,13 +1088,13 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 | METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
 | :--- | :--- | :--- | :--- | :--- |
-| **Average ± SD** | 0.00 ± 0.17 µs | 0.00 ± 0.13 µs | 0.01 ± 0.30 µs | 0.01 ± 0.20 µs |
-| **WCET (Max)** | 9 µs | 8 µs | 45 µs | 11 µs |
+| **Average ± SD** | 556.31 ± 154.19 ns | 557.07 ± 162.41 ns | 812.91 ± 437.85 ns | 545.04 ± 180.80 ns |
+| **WCET (Max)** | 7470 ns | 9550 ns | 51259 ns | 11321 ns |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
 
-* Average Increment: +221.55%
-* WCET Increment: +400.00%
+* Average Increment: +46.12%
+* WCET Increment: +586.20%
 
 ![TACLe benchmark - matrix1 execution time on Xen](tests_TACLe/plots_nanosec/svg/xen_TACLe_matrix1_boxplot.svg)
 
@@ -1128,7 +1128,7 @@ Data collection was automated with the provided bash script, which orchestrates 
 
 #### Statistics extracted per file
 
-| **Benchmark** | **Config** | **Min (µs)** | **Media (µs)** | **p99 (µs)** | **Massimo (µs)** | **Overflow** |
+| **Benchmark** | **Config** | **Min (µs)** | **Average (µs)** | **p99 (µs)** | **Max (µs)** | **Overflow** |
 |---------------|------------|--------------|----------------|--------------|------------------|--------------|
 | debie         | LL         | 30212.0      | 37133.0        | 46259.0      | 72372.0          | 0            |
 | debie         | LL-pinned  | 23976.0      | 27275.0        | 29703.0      | 39230.0          | 0            |
@@ -1151,7 +1151,7 @@ The following graph summarizes, for each benchmark, the percentage variation of 
 *Percentage variation of the mean, p99, and maximum (LL-pinned vs LL) for the five TACLe benchmarks: debie, huff_enc, lift, matrix1, test3.*
 
 #### % Variation LL-pinned vs LL
-| **Benchmark** | **Δ Media** | **Δ p99** | **Δ Massimo** |
+| **Benchmark** | **Δ Average** | **Δ p99** | **Δ Max** |
 |---------------|-------------|-----------|---------------|
 | debie         | -26.5%      | -35.8%    | -45.8%        |
 | huff_enc      | -34.1%      | -31.4%    | +142.6%       |

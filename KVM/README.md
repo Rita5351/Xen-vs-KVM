@@ -382,8 +382,8 @@ Establishing this baseline is critical for evaluating the determinism and worst-
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
 | **DEBIE** | 10,000 | 23,578 | 27,214 | 32,409 | 8,831 μs |
-| **huffenc** | 1,000,000 | 15 | 16 | 64 | 49 μs |
-| **lift** | 1,000,000 | 19 | 19 | 61 | 42 μs |
+| **huffenc** | 1,000,000 | 15 | 17 | 65 | 50 μs |
+| **lift** | 1,000,000 | 19 | 20 | 57 | 38 μs |
 | **matrix1** | 1,000,000 | 0 | 0 | 1 | 1 μs |
 | **test3** | 10,000 | 8,169 | 8,363 | 9,471 | 1,302 μs |
 
@@ -396,13 +396,13 @@ Establishing this baseline is critical for evaluating the determinism and worst-
 
 **Huffenc**
 
-* The `huffenc` benchmark executed 1,000,000 loops with an extremely stable average latency of 16 µs.
-* The maximum latency peaked at 64 µs, resulting in an absolute jitter of 49 µs.
+* The `huffenc` benchmark executed 1,000,000 loops with a stable average latency of 17 µs.
+* The maximum latency peaked at 65 µs, resulting in an absolute jitter of 50 µs.
 
 **Lift**
 
-* The `lift` application benchmark showed strong determinism, maintaining an average latency of 19 µs matching its minimum latency.
-* The worst-case latency was 61 µs, yielding a tightly bounded jitter of 42 µs on this KVM baseline.
+* The `lift` application benchmark showed strong determinism, maintaining an average latency of 20 µs close to its minimum latency.
+* The worst-case latency was 57 µs, yielding an absolute jitter of 38 µs on this KVM baseline.
 
 **Matrix1**
 
@@ -416,7 +416,7 @@ Establishing this baseline is critical for evaluating the determinism and worst-
 
 #### Real-Time Systems Assessment
 
-This KVM baseline provides the reference point for unisolated virtualized performance. Lightweight tasks (`matrix1`) exhibit virtually zero jitter (1 µs peak), while medium and heavy tasks (`test3`, `DEBIE`) show the natural variance introduced by the standard KVM scheduler (up to 8,831 µs of jitter for DEBIE). These metrics will be crucial for quantifying the exact determinism improvements when CPU pinning and LL-RT kernel isolation techniques are introduced.
+This KVM baseline provides the reference point for unisolated virtualized performance. Lightweight tasks (`matrix1`) exhibit virtually zero jitter (1 µs peak), `lift` shows a moderate baseline jitter of 38 µs, while medium and heavy tasks (`test3`, `DEBIE`) show the natural variance introduced by the standard KVM scheduler (up to 8,831 µs of jitter for DEBIE). These metrics will be crucial for quantifying the exact determinism improvements when CPU pinning and LL-RT kernel isolation techniques are introduced.
 
 ### TACLeBench Small Noise Execution Analysis
 
@@ -427,9 +427,9 @@ This analysis evaluates the determinism and worst-case execution time (WCET) lat
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
 | **DEBIE** | 10,000 | 23,800 | 27,221 | 30,872 | 7,072 μs |
-| **huffenc** | 1,000,000 | 15 | 15 | 61 | 46 μs |
-| **lift** | 1,000,000 | 19 | 19 | 58 | 39 μs |
-| **matrix1** | 1,000,000 | 0 | 0 | 0 | 0 μs |
+| **huffenc** | 1,000,000 | 15 | 17 | 49 | 34 μs |
+| **lift** | 1,000,000 | 19 | 20 | 55 | 36 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 1 | 1 μs |
 | **test3** | 10,000 | 8,078 | 8,270 | 8,612 | 534 μs |
 
 #### Workload-Specific Behavior
@@ -441,18 +441,18 @@ This analysis evaluates the determinism and worst-case execution time (WCET) lat
 
 **Huffenc**
 
-* The sequential `huffenc` task executes with an average latency of 15 µs and a maximum peak of 61 µs.
-* This results in a relatively tight absolute jitter of 46 µs.
+* The sequential `huffenc` task executes with an average latency of 17 µs and a maximum peak of 49 µs.
+* This results in an absolute jitter of 34 µs.
 
 **Lift**
 
-* The `lift` control benchmark maintains strong determinism under light noise, averaging 19 µs with a worst-case execution time of 58 µs.
-* The resulting jitter is closely bounded at 39 µs, showing good resilience to minor disturbances.
+* The `lift` control benchmark maintains strong determinism under light noise, averaging 20 µs with a worst-case execution time of 55 µs.
+* The resulting jitter is bounded at 36 µs, showing good resilience to minor disturbances, and is close to its already-moderate baseline jitter (38 µs).
 
 **Matrix1**
 
-* The lightweight, cache-bound `matrix1` benchmark performs flawlessly under the small noise configuration, logging sub-microsecond values across minimum, average, and maximum execution times.
-* This yields a theoretical absolute jitter of under 1 µs, indicating zero cache thrashing or scheduling interruptions occurred during its 1,000,000 loops.
+* The lightweight, cache-bound `matrix1` benchmark performs almost flawlessly under the small noise configuration, logging sub-microsecond average execution time with a max of just 1 µs.
+* This yields a minimal absolute jitter of 1 µs, indicating negligible cache thrashing or scheduling interruptions occurred during its 1,000,000 loops.
 
 **Test3**
 
@@ -461,7 +461,7 @@ This analysis evaluates the determinism and worst-case execution time (WCET) lat
 
 #### Real-Time Systems Assessment
 
-Under the KVM "Small Noise" scenario, the hypervisor exhibits relatively stable behavior for lightweight and medium workloads. Notably, `matrix1` shows perfect execution without any measurable jitter, and `test3` maintains tight WCET margins. However, the `DEBIE` workload still suffers from over 7 milliseconds of jitter, confirming that unisolated schedulers struggle to guarantee execution determinism for long-running, parallel tasks even when background noise is minimal.
+Under the KVM "Small Noise" scenario, the hypervisor exhibits relatively stable behavior for lightweight and medium workloads. Notably, `matrix1` shows near-perfect execution with negligible jitter (1 µs peak), and `test3` maintains tight WCET margins. However, the `DEBIE` workload still suffers from over 7 milliseconds of jitter, confirming that unisolated schedulers struggle to guarantee execution determinism for long-running, parallel tasks even when background noise is minimal.
 
 ### TACLeBench Big Noise Execution Analysis 
 
@@ -472,9 +472,9 @@ This analysis evaluates the determinism and worst-case execution time (WCET) lat
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
 | **DEBIE** | 10,000 | 24,773 | 28,845 | 43,849 | 19,076 μs |
-| **huffenc** | 1,000,000 | 15 | 26 | 69 | 54 μs |
-| **lift** | 1,000,000 | 19 | 19 | 280 | 261 μs |
-| **matrix1** | 1,000,000 | 0 | 0 | 6 | 6 μs |
+| **huffenc** | 1,000,000 | 15 | 17 | 393 | 378 μs |
+| **lift** | 1,000,000 | 19 | 21 | 186 | 167 μs |
+| **matrix1** | 1,000,000 | 0 | 0 | 1 | 1 μs |
 | **test3** | 10,000 | 8,243 | 8,457 | 9,458 | 1,215 μs |
 
 #### Workload-Specific Behavior
@@ -486,18 +486,18 @@ This analysis evaluates the determinism and worst-case execution time (WCET) lat
 
 **Huffenc**
 
-* While the minimum latency for the `huffenc` task remains stable at 15 µs, the average latency rises to 26 µs under noise.
-* The maximum latency peaks at 69 µs, resulting in a relatively contained absolute jitter of 54 µs for this specific sequential pattern.
+* While the minimum latency for the `huffenc` task remains stable at 15 µs, the average latency stays close to baseline at 17 µs.
+* The maximum latency, however, spikes dramatically to 393 µs, resulting in an absolute jitter of 378 µs — the largest percentage increase (+501% on WCET) of any benchmark tested, revealing severe worst-case tail latency under heavy stress despite a stable average.
 
 **Lift**
 
-* The `lift` benchmark shows a sharp breakdown in worst-case determinism, with the maximum latency spiking dramatically to 280 µs.
-* This generates an absolute jitter of 261 µs, indicating that even highly repetitive, lightweight control tasks suffer from severe, albeit occasional, micro-interruptions under heavy KVM load.
+* The `lift` benchmark shows a sharp breakdown in worst-case determinism, with the maximum latency spiking to 186 µs.
+* This generates an absolute jitter of 167 µs (+226% on WCET versus baseline), indicating that even highly repetitive, lightweight control tasks suffer from severe, albeit occasional, micro-interruptions under heavy KVM load.
 
 **Matrix1**
 
-* The `matrix1` execution remains extremely fast, maintaing a sub-microsecond average latency.
-* However, the maximum latency increases to 6 µs, representing a 6 µs jitter. While numerically small, this indicates minor cache thrashing or context switching interference affecting the otherwise instantaneous execution.
+* The `matrix1` execution remains extremely fast, maintaining a sub-microsecond average latency.
+* The maximum latency stays at 1 µs, representing a jitter of just 1 µs — a modest but measurable +32% increase in WCET versus baseline, indicating minor cache thrashing or context-switching interference affecting the otherwise near-instantaneous execution.
 
 **Test3**
 
@@ -506,7 +506,7 @@ This analysis evaluates the determinism and worst-case execution time (WCET) lat
 
 #### Real-Time Systems Assessment
 
-The KVM "Big Noise" scenario illustrates the vulnerability of unisolated hypervisor scheduling. While some workloads (`test3`, `matrix1`) show mild resilience, the heavy `DEBIE` workload suffers massive jitter expansion (19,076 µs), and the critical `lift` control loop experiences severe latency spikes (280 µs peak). These results suggest the lack of boundaries required for real-time applications.
+The KVM "Big Noise" scenario illustrates the vulnerability of unisolated hypervisor scheduling. While `test3` and `matrix1` show relative resilience, the heavy `DEBIE` workload suffers massive jitter expansion (19,076 µs), and the lightweight `huffenc` and `lift` control loops experience the sharpest *percentage* degradation of the whole suite: `huffenc` WCET jumps from 65 µs to 393 µs (+501%), and `lift` WCET jumps from 57 µs to 186 µs (+226%), despite both keeping stable average latencies. This shows that unisolated KVM scheduling can produce severe worst-case tail latency spikes on short, high-frequency workloads even when average-case behavior looks stable — a critical finding for real-time guarantees. These results suggest the lack of boundaries required for real-time applications.
 
 ### TACLeBench Big Noise Pinned Execution Analysis 
 
@@ -517,8 +517,8 @@ This phase of the evaluation investigates the determinism and worst-case executi
 | Benchmark | Total Loops | Min Latency (μs) | Avg Latency (μs) | Max Latency (μs) | Absolute Jitter (Max - Min) |
 | --- | --- | --- | --- | --- | --- |
 | **DEBIE** | 10,000 | 23,893 | 27,444 | 37,284 | 13,391 μs |
-| **huffenc** | 1,000,000 | 15 | 16 | 62 | 47 μs |
-| **lift** | 1,000,000 | 19 | 20 | 67 | 48 μs |
+| **huffenc** | 1,000,000 | 15 | 17 | 73 | 58 μs |
+| **lift** | 1,000,000 | 19 | 21 | 70 | 51 μs |
 | **matrix1** | 1,000,000 | 0 | 0 | 1 | 1 μs |
 | **test3** | 10,000 | 8,544 | 8,745 | 10,996 | 2,452 μs |
 
@@ -531,18 +531,18 @@ This phase of the evaluation investigates the determinism and worst-case executi
 
 **Huffenc**
 
-* The `huffenc` task executes with an average latency of 16 µs and a maximum peak of 62 µs.
-* CPU pinning effectively bounds the absolute jitter at 47 µs, restoring a high degree of stability to this sequential loop.
+* The `huffenc` task executes with an average latency of 17 µs and a maximum peak of 73 µs.
+* CPU pinning dramatically reduces the absolute jitter to 58 µs, and — critically — pulls the WCET down from 393 µs (unpinned Big Noise) back to 73 µs, restoring a high degree of stability to this sequential loop.
 
 **Lift**
 
-* Under the pinned configuration, the `lift` benchmark regains strict determinism, maintaining an average latency of 20 µs.
-* The maximum latency reaches only 67 µs, yielding a tight absolute jitter of 48 µs, which completely eliminates the massive 280 µs spike seen in the unpinned noise test.
+* Under the pinned configuration, the `lift` benchmark regains much of its determinism, maintaining an average latency of 21 µs.
+* The maximum latency reaches 70 µs, yielding an absolute jitter of 51 µs — far below the 167 µs jitter seen in the unpinned Big Noise test, and now close to the baseline's own jitter of 38 µs.
 
 **Matrix1**
 
 * The `matrix1` execution is almost perfectly insulated by the pinning, maintaining a sub-microsecond average latency and an absolute worst-case execution time of just 1 µs.
-* This 1 µs absolute jitter confirms that cache thrashing and context migrations have been successfully mitigated.
+* This 1 µs absolute jitter confirms that cache thrashing and context migrations have been largely mitigated, in line with its baseline behavior.
 
 **Test3**
 
@@ -551,7 +551,7 @@ This phase of the evaluation investigates the determinism and worst-case executi
 
 #### Real-Time Systems Assessment
 
-The KVM "Big Noise Pinned" baseline demonstrates the critical importance of CPU pinning when operating in highly congested environments. By binding tasks to specific cores, the KVM scheduler prevents the catastrophic latency spikes observed in the unpinned tests. Lightweight tasks (`matrix1`, `lift`, `huffenc`) return to near-baseline determinism, and heavier workloads (`DEBIE`) see their jitter margins compressed significantly. This confirms that static pinning is a highly effective first step in isolating real-time workloads on KVM before applying further kernel-level techniques.
+The KVM "Big Noise Pinned" baseline demonstrates the critical importance of CPU pinning when operating in highly congested environments. By binding tasks to specific cores, the KVM scheduler prevents the catastrophic latency spikes observed in the unpinned tests — most notably for `huffenc`, whose WCET drops from 393 µs back to 73 µs once pinning is applied. Lightweight tasks (`matrix1`, `huffenc`, `lift`) return to near-baseline determinism, with `lift`'s WCET (70 µs) settling close to its own baseline (57 µs) rather than the elevated 186 µs seen unpinned. Heavier workloads (`DEBIE`) see their jitter margins compressed significantly. This confirms that static pinning is a highly effective first step in isolating real-time workloads on KVM before applying further kernel-level techniques.
 
 ### Max Latency Summary (μs)
 To quickly evaluate system stability, the following table exclusively reports the peak values (**Max Latency**). This format allows for an at-a-glance comparison of the Worst-Case Execution Time across the four operational scenarios, directly highlighting the impact of noise and the effectiveness of CPU pinning in containing interference.
@@ -559,9 +559,9 @@ To quickly evaluate system stability, the following table exclusively reports th
 | Benchmark | Baseline | Small Noise | Big Noise | Big Noise Pinned |
 | --- | --- | --- | --- | --- |
 | **DEBIE** | 32,409 | 30,872 | 43,849 | 37,284 |
-| **huffenc** | 64 | 61 | 69 | 62 |
-| **lift** | 61 | 58 | 280 | 67 |
-| **matrix1** | 1 | 0 | 6 | 1 |
+| **huffenc** | 65 | 49 | 393 | 73 |
+| **lift** | 57 | 55 | 186 | 70 |
+| **matrix1** | 1 | 1 | 1 | 1 |
 | **test3** | 9,471 | 8,612 | 9,458 | 10,996 |
 
 Furthermore, alongside the WCET summary, this section now includes a detailed breakdown of the percentage increments for both the average latency (expressed as Mean $\pm$ Standard Deviation) and the maximum latency (WCET). This addition provides a precise quantitative analysis of the performance degradation induced by the heavy background noise compared to the baseline execution for each individual benchmark.
@@ -584,12 +584,12 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 | METRIC | BASELINE | BIG NOISE | SMALL NOISE | BIG NOISE PINNED |
 | :--- | :--- | :--- | :--- | :--- |
-| **Mean ± SD** | 16.02 ± 3.39 µs | 15.86 ± 3.76 µs | 26.21 ± 5.01 µs | 16.53 ± 3.73 µs |
-| **WCET (Max)** | 64 µs | 61 µs | 69 µs | 62 µs |
+| **Mean ± SD** | 16619.81 ± 3708.79 ns | 17306.98 ± 4400.23 ns | 16624.73 ± 3207.31 ns | 16871.85 ± 3772.31 ns |
+| **WCET (Max)** | 65431 ns | 393480 ns | 49307 ns | 72590 ns |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
-* Average Increment: +63.63%
-* WCET Increment: +7.81%
+* Average Increment: +4.13%
+* WCET Increment: +501.37%
 
 ![TACLe benchmark - huff_enc execution time on KVM](tests_TACLe/plots_nanosec/svg/kvm_TACLe_huffenc_boxplot.svg)
 
@@ -598,12 +598,12 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 | METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
 | :--- | :--- | :--- | :--- | :--- |
-| **Mean ± SD** | 19.44 ± 3.00 µs || 19.44 ± 2.99 µs | 19.42 ± 3.00 µs  20.31 ± 4.91 µs |
-| **WCET (Max)** | 61 µs | 58 µs | 280 µs | 67 µs |
+| **Mean ± SD** | 20106.37 ± 2997.02 ns | 20113.88 ± 3034.06 ns | 21218.61 ± 4413.84 ns | 21259.27 ± 5273.76 ns |
+| **WCET (Max)** | 27169 ns | 54767 ns | 186424 ns | 69974 ns |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
-* Average Increment: -0.07%
-* WCET Increment: +359.02%
+* Average Increment: +5.53%
+* WCET Increment: +226.09%
 
 ![TACLe benchmark - lift execution time on KVM](tests_TACLe/plots_nanosec/svg/kvm_TACLe_lift_boxplot.svg)
 
@@ -611,12 +611,12 @@ Furthermore, alongside the WCET summary, this section now includes a detailed br
 
 | METRIC | BASELINE | SMALL NOISE | BIG NOISE | BIG NOISE PINNED |
 | :--- | :--- | :--- | :--- | :--- |
-| **Mean ± SD** | 0.00 ± 0.00 µs | 0.00 ± 0.00 µs | 0.00 ± 0.01 µs | 0.00 ± 0.00 µs |
-| **WCET (Max)** | 1 µs | 0 µs | 6 µs | 1 µs |
+| **Mean ± SD** | 367.88 ± 6.57 ns | 369.95 ± 6.66 ns | 370.74 ± 20.92 ns | 384.14 ± 29.37 ns |
+| **WCET (Max)** | 720 ns | 790 ns | 950 ns | 1070 ns |
 
 **PERCENTAGE INCREMENTS (Stress vs. Baseline):**
-* Average Increment: +600.00%
-* WCET Increment: +500.00%
+* Average Increment: +0.78%
+* WCET Increment: +31.94%
 
 ![TACLe benchmark - matrix1 execution time on KVM](tests_TACLe/plots_nanosec/svg/kvm_TACLe_matrix1_boxplot.svg)
 
