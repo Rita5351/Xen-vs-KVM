@@ -9,8 +9,9 @@
 #   2. Host stress       — CPU + VM stress-ng on the host
 #   3. Isolated + stress — isolated VM variant + CPU + VM stress-ng on the host
 #
-# For each scenario the following kernel combinations are tested:
-#   NRT-NRT, NRT-RT, RT-NRT, RT-RT
+# Kernel combinations tested: NRT-NRT, NRT-RT, RT-NRT, RT-RT
+# Counterpart script : ../Xen/cyclictest_xen.sh
+# Results land in   : $RESULTS_DIR
 # ==============================================================================
 
 # ==============================================================================

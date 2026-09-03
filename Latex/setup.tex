@@ -172,10 +172,10 @@ For the Real-Time kernel, we needed to follow some additional steps:
 \FunctionTok{sudo}\NormalTok{ make install}
 \end{Highlighting}
 \end{Shaded}
-
-    \subsubsection{Hardware Tuning
-  (BIOS/UEFI)}\label{hardware-tuning-biosuefi}
 \end{itemize}
+
+\subsubsection{Hardware Tuning
+  (BIOS/UEFI)}\label{hardware-tuning-biosuefi}
 
 The configurations in this section are highly hardware-specific and will
 vary depending on the motherboard manufacturer and CPU vendor. To ensure
@@ -423,6 +423,51 @@ any modification but the installation of \texttt{stress-ng}:
 \FunctionTok{sudo}\NormalTok{ apt {-}y install stress{-}ng}
 \end{Highlighting}
 \end{Shaded}
+
+The host configuration for the TACLe experiment differs from the
+cyclictest one in a subtle but important way. In the cyclictest
+experiments, the host was booted with \texttt{isolcpus=22-23} to fully
+remove those two cores from the kernel's load balancer, ensuring that
+QEMU's vCPU threads would be the only workload on those cores. This
+approach works precisely because there is only one VM and its placement
+is static.
+
+For the TACLe experiment, however, we need the Linux scheduler to remain
+active across CPUs 4--23, because both the TACLe VM and the noisy VM
+must be free to float across that entire pool. Using
+\texttt{isolcpus=4-23} would remove those cores from the load balancer
+entirely, preventing KVM from distributing the two VMs' vCPU threads
+across them --- exactly the opposite of what we need.
+
+Instead, we boot the host using a dedicated GRUB entry that applies
+\texttt{nohz\_full=4-23}, \texttt{rcu\_nocbs=4-23}, and
+\texttt{irqaffinity=0-3} to reduce kernel noise on the VM cores, but
+deliberately omits \texttt{isolcpus}:
+
+\begin{Verbatim}[breaklines=true,breakanywhere=true]
+menuentry 'Ubuntu 24.04 (6.18.35-rt5 TACLe)'{
+        echo 'Loading Linux 6.18.35-rt5 with NO_HZ, RCU_NOCBS and no IRQ_AFFINITY on [4, 23]'
+        linux   /boot/vmlinuz-6.18.35-rt5 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=4-23 rcu_nocbs=4-23 irqaffinity=0-3 quiet splash $vt_handoff
+        initrd  /boot/initrd.img-6.18.35-rt5
+}
+\end{Verbatim}
+
+To prevent host user-space services from wandering onto CPUs 4--23
+without disabling the load balancer, we confine the host's systemd
+cgroup to CPUs 0--3 by adding the following line to
+\texttt{/etc/systemd/system.conf}:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\DataTypeTok{CPUAffinity}\OtherTok{=}\DecValTok{0{-}3}
+\end{Highlighting}
+\end{Shaded}
+
+This setting is applied at boot (PID 1 reads \texttt{system.conf} on
+startup) and removed at the end of the experiment via
+\texttt{sudo\ systemctl\ daemon-reexec}, which re-executes systemd
+in-place without restarting any services, immediately restoring normal
+scheduling.
 
 \subsection{Xen}\label{xen}
 

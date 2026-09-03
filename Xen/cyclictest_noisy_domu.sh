@@ -1,6 +1,16 @@
 #!/bin/bash
 
 # ==============================================================================
+# XEN CYCLICTEST WITH NOISY DOMU ORCHESTRATION SCRIPT
+#
+# Runs cyclictest inside a regular HVM DomU while a "noisy" DomU (large HVM
+# guest running heavy stress-ng inside itself) creates interference.
+# Tested across all Dom0 kernel configurations (NRT / LL, non-pinned / pinned,
+# 4 vCPUs) with NRT and RT regular guests.
+# Results land in: $RESULTS_DIR
+# ==============================================================================
+
+# ==============================================================================
 # CONFIGURATION
 # ==============================================================================
 

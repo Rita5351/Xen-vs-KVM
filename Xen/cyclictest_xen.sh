@@ -1,6 +1,19 @@
 #!/bin/bash
 
 # ==============================================================================
+# XEN CYCLICTEST ORCHESTRATION SCRIPT
+#
+# Runs cyclictest inside a Xen HVM DomU across all Dom0 kernel configurations
+# (NRT / LL, non-pinned / pinned, 22 vCPUs) and three stress scenarios:
+#   baseline            — no Dom0 stress
+#   stresshost          — CPU + VM stress-ng on Dom0
+#   stresshost_maxprioqemu — same stress + QEMU Device Model at FIFO priority 98
+#
+# Kernel combinations tested: NRT-NRT, NRT-RT, LL-NRT, LL-RT (HVM guests).
+# Results land in: $RESULTS_DIR
+# ==============================================================================
+
+# ==============================================================================
 # CONFIGURATION
 # ==============================================================================
 

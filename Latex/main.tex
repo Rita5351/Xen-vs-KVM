@@ -542,8 +542,8 @@ on commodity hardware.
 We designed and executed a systematic measurement campaign using
 \texttt{cyclictest} and five TACLe real-time benchmarks under multiple
 host--guest kernel combinations, quantifying the impact of key isolation
-mechanisms: vCPU pinning, host-side \texttt{isolcpus}/\texttt{nohz\_full},
-IRQ steering, and cache/memory-bandwidth partitioning via Intel~RDT.
+mechanisms, such as vCPU pinning, host-side \texttt{isolcpus}/
+\texttt{nohz\_full} and IRQ steering.
 For Xen, we further compare all three guest types (HVM, PV, PVH) and
 evaluate the Null versus Credit2 schedulers.
 Building on the methodology of Abeni and Faggioli~\cite{abeni2019,abeni2020},

@@ -1,6 +1,16 @@
 #!/bin/bash
 
 # ==============================================================================
+# XEN TACLE BENCHMARK WITH DOM0 STRESS ORCHESTRATION SCRIPT
+#
+# Runs TACLe benchmarks inside a Xen HVM DomU while persistent CPU + VM
+# stress-ng runs on Dom0 throughout every benchmark run.
+# Dom0 kernel fixed to LL (6.18.35-rt5-ll), tested in non-pinned and pinned
+# configurations with the TACLe RT guest.
+# Results land in: $RESULTS_DIR
+# ==============================================================================
+
+# ==============================================================================
 # CONFIGURATION
 # ==============================================================================
 
@@ -53,10 +63,10 @@ DOM0_STRESSORS=(
 
 # ---------------------------------------------------------------------------
 # TACLe benchmarks
-# Format: associative array  label -> command
-# Commands are run from TACLE_DIR inside the DomU.
-# stdout/stderr are discarded (> /dev/null 2>&1) so nothing flows through
-# the Xen serial console emulator during the timed ru---------------------------------------------------------------------------
+# Format: label -> command, run from TACLE_DIR inside the DomU.
+# stdout/stderr are discarded so nothing flows through the serial console
+# during the timed run (console writes cause VM-exits and inflate latency).
+# ---------------------------------------------------------------------------
 TACLE_DIR="/home/matt/custom_tests"
 
 declare -A TACLE_BENCHMARKS=(

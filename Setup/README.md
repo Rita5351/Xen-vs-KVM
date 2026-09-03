@@ -83,6 +83,7 @@ For the Real-Time kernel, we needed to follow some additional steps:
   sudo make modules_install
   sudo make install
   ```
+
 ### Hardware Tuning (BIOS/UEFI)
 
 The configurations in this section are highly hardware-specific and will vary depending on the motherboard manufacturer and CPU vendor. To ensure predictable performance and minimize latency spikes for real-time workloads, it is crucial to disable dynamic frequency scaling and deep power-saving states directly at the firmware level. 
@@ -219,6 +220,28 @@ These three also share a different virtual drive, that does not require any modi
 ```bash
 sudo apt -y install stress-ng
 ```
+
+The host configuration for the TACLe experiment differs from the cyclictest one in a subtle but important way. In the cyclictest experiments, the host was booted with `isolcpus=22-23` to fully remove those two cores from the kernel's load balancer, ensuring that QEMU's vCPU threads would be the only workload on those cores. This approach works precisely because there is only one VM and its placement is static.
+
+For the TACLe experiment, however, we need the Linux scheduler to remain active across CPUs 4–23, because both the TACLe VM and the noisy VM must be free to float across that entire pool. Using `isolcpus=4-23` would remove those cores from the load balancer entirely, preventing KVM from distributing the two VMs' vCPU threads across them — exactly the opposite of what we need.
+
+Instead, we boot the host using a dedicated GRUB entry that applies `nohz_full=4-23`, `rcu_nocbs=4-23`, and `irqaffinity=0-3` to reduce kernel noise on the VM cores, but deliberately omits `isolcpus`:
+
+```text
+menuentry 'Ubuntu 24.04 (6.18.35-rt5 TACLe)'{
+        echo 'Loading Linux 6.18.35-rt5 with NO_HZ, RCU_NOCBS and no IRQ_AFFINITY on [4, 23]'
+        linux   /boot/vmlinuz-6.18.35-rt5 root=UUID=8e001ea3-a450-434d-bfab-ee2e6f61c6a2 ro  nohz_full=4-23 rcu_nocbs=4-23 irqaffinity=0-3 quiet splash $vt_handoff
+        initrd  /boot/initrd.img-6.18.35-rt5
+}
+```
+
+To prevent host user-space services from wandering onto CPUs 4–23 without disabling the load balancer, we confine the host's systemd cgroup to CPUs 0–3 by adding the following line to `/etc/systemd/system.conf`:
+
+```ini
+CPUAffinity=0-3
+```
+
+This setting is applied at boot (PID 1 reads `system.conf` on startup) and removed at the end of the experiment via `sudo systemctl daemon-reexec`, which re-executes systemd in-place without restarting any services, immediately restoring normal scheduling.
 
 ## Xen
 
