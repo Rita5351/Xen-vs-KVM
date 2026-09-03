@@ -963,9 +963,9 @@ This phase of the evaluation investigates the determinism and worst-case executi
 
 **Lift**
 
-* The `lift` benchmark's determinism collapses entirely under the big noise configuration, with the maximum latency spiking to 1,000 µs — a full millisecond, and nearly 4x the baseline's already-elevated 254 µs peak.
+* The `lift` benchmark's determinism collapses entirely under the big noise configuration, with the maximum latency spiking to 1.518 μs — a full millisecond, and nearly 4x the baseline's already-elevated 254 µs peak.
 
-* The average latency also rises substantially to 38 µs (up from 24 µs at baseline, a +55.89% increase), and the absolute jitter of 983 µs confirms severe, sustained scheduling delays rather than an isolated outlier.
+* The average latency also rises substantially to 38 µs (up from 24 µs at baseline, a +55.89% increase), and the absolute jitter of 1498 μs confirms severe, sustained scheduling delays rather than an isolated outlier.
 
 **Matrix1**
 
