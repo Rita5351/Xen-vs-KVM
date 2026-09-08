@@ -1656,7 +1656,7 @@
                       <td>4 µs</td>
                       <td>8.55 ± 3.27 µs</td>
                       <td class="bad">6,114 µs</td>
-                      <td>0</td>
+                      <td>3</td>
                     </tr>
                     <tr>
                       <td>RT Host + NRT Guest</td>
@@ -3497,99 +3497,7 @@
         <div class="slide-frame">
           <div class="slide-inner">
             <div class="slide-label">Xen — 32-Scenario Stressor Study</div>
-            <div class="slide-title">32-Scenario Stressor Study: Summary</div>
-            <div class="slide-subtitle">4 factors × combinations: Dom0 kernel (NRT/LL) · vCPU pinning (yes/no) · Guest
-              type (nrt/rt5) · Stressor (baseline/cache/interrupts/rawsock)</div>
-            <div class="slide-divider"></div>
-            <div class="content-body">
-              <div class="col col-2">
-                <div class="card">
-                  <h3>Summary by Pinning Effect (all 32 scenarios)</h3>
-                  <table class="tbl" style="margin-top:8px">
-                    <tr>
-                      <th>Group</th>
-                      <th>Avg Mean Latency</th>
-                      <th>Max WCET</th>
-                      <th>Total Overflows</th>
-                      <th>Runs with Overflow</th>
-                    </tr>
-                    <tr>
-                      <td><strong>Pinned guests</strong></td>
-                      <td class="good">32.6 µs</td>
-                      <td class="warn">35,984 µs*</td>
-                      <td>48</td>
-                      <td class="good">2 / 15</td>
-                    </tr>
-                    <tr>
-                      <td><strong>Unpinned guests</strong></td>
-                      <td>35.4 µs</td>
-                      <td class="bad">61,826 µs</td>
-                      <td>179</td>
-                      <td class="bad">8 / 16</td>
-                    </tr>
-                  </table>
-                  <p style="font-size:11px;color:var(--text-light);margin-top:4px">* Single isolated anomaly — one
-                    outlier at ~36 ms, cycle 913 of 4.93M</p>
-                </div>
-                <div class="grid-2" style="gap:12px">
-                  <div class="card" style="text-align:center;padding:12px">
-                    <div class="stat">
-                      <div class="num" style="font-size:22px;color:var(--green)">4×</div>
-                      <div class="label">Fewer runs with overflows (pinned vs unpinned)</div>
-                    </div>
-                  </div>
-                  <div class="card" style="text-align:center;padding:12px">
-                    <div class="stat">
-                      <div class="num" style="font-size:22px;color:var(--blue)">88</div>
-                      <div class="label">Overflows — worst single run (NRT + nrt + cache)</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="col">
-                <div class="card" style="flex:1">
-                  <h3>Key Findings</h3>
-                  <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
-                    <div class="callout callout-green" style="padding:8px 12px">
-                      <span class="callout-icon">①</span>
-                      <div><strong>vCPU pinning is the dominant factor</strong> — almost deterministic behaviour
-                        regardless of Dom0 kernel or stressor type</div>
-                    </div>
-                    <div class="callout callout-red" style="padding:8px 12px">
-                      <span class="callout-icon">②</span>
-                      <div><strong>Unpinned nrt-hvm guest is most fragile</strong> — up to 62 ms WCET, 88 overflows
-                        under cache stressor</div>
-                    </div>
-                    <div class="callout callout-green" style="padding:8px 12px">
-                      <span class="callout-icon">③</span>
-                      <div><strong>rt5 guest systematically more stable</strong> than nrt guest, whether pinned or not
-                      </div>
-                    </div>
-                    <div class="callout callout-amber" style="padding:8px 12px">
-                      <span class="callout-icon">④</span>
-                      <div><strong>cache stressor most unpredictable</strong> — worst single case (88 overflows) but
-                        harmless with pinning (0 overflows)</div>
-                    </div>
-                    <div class="callout callout-cyan" style="padding:8px 12px">
-                      <span class="callout-icon">⑤</span>
-                      <div><strong>LL vs NRT Dom0:</strong> No clear winner on unpinned guests — interaction with guest
-                        type and stressor is more complex</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="slide slide-light" data-section="Xen">
-      <div class="scaler">
-        <div class="slide-frame">
-          <div class="slide-inner">
-            <div class="slide-label">Xen — 32-Scenario Stressor Study</div>
-            <div class="slide-title">Experimental Design: 4 Factors, 32 Combinations</div>
+            <div class="slide-title">32-Scenario Stressor Study: Experimental Design</div>
             <div class="slide-divider"></div>
             <div class="content-body">
               <div class="col col-2">
@@ -4088,6 +3996,98 @@
                       <td></td>
                     </tr>
                   </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="slide slide-light" data-section="Xen">
+      <div class="scaler">
+        <div class="slide-frame">
+          <div class="slide-inner">
+            <div class="slide-label">Xen — 32-Scenario Stressor Study</div>
+            <div class="slide-title">32-Scenario Stressor Study: Summary</div>
+            <div class="slide-subtitle">4 factors × combinations: Dom0 kernel (NRT/LL) · vCPU pinning (yes/no) · Guest
+              type (nrt/rt5) · Stressor (baseline/cache/interrupts/rawsock)</div>
+            <div class="slide-divider"></div>
+            <div class="content-body">
+              <div class="col col-2">
+                <div class="card">
+                  <h3>Summary by Pinning Effect (all 32 scenarios)</h3>
+                  <table class="tbl" style="margin-top:8px">
+                    <tr>
+                      <th>Group</th>
+                      <th>Avg Mean Latency</th>
+                      <th>Max WCET</th>
+                      <th>Total Overflows</th>
+                      <th>Runs with Overflow</th>
+                    </tr>
+                    <tr>
+                      <td><strong>Pinned guests</strong></td>
+                      <td class="good">32.6 µs</td>
+                      <td class="warn">35,984 µs*</td>
+                      <td>48</td>
+                      <td class="good">2 / 15</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Unpinned guests</strong></td>
+                      <td>35.4 µs</td>
+                      <td class="bad">61,826 µs</td>
+                      <td>179</td>
+                      <td class="bad">8 / 16</td>
+                    </tr>
+                  </table>
+                  <p style="font-size:11px;color:var(--text-light);margin-top:4px">* Single isolated anomaly — one
+                    outlier at ~36 ms, cycle 913 of 4.93M</p>
+                </div>
+                <div class="grid-2" style="gap:12px">
+                  <div class="card" style="text-align:center;padding:12px">
+                    <div class="stat">
+                      <div class="num" style="font-size:22px;color:var(--green)">4×</div>
+                      <div class="label">Fewer runs with overflows (pinned vs unpinned)</div>
+                    </div>
+                  </div>
+                  <div class="card" style="text-align:center;padding:12px">
+                    <div class="stat">
+                      <div class="num" style="font-size:22px;color:var(--blue)">88</div>
+                      <div class="label">Overflows — worst single run (NRT + nrt + cache)</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="col">
+                <div class="card" style="flex:1">
+                  <h3>Key Findings</h3>
+                  <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+                    <div class="callout callout-green" style="padding:8px 12px">
+                      <span class="callout-icon">①</span>
+                      <div><strong>vCPU pinning is the dominant factor</strong> — almost deterministic behaviour
+                        regardless of Dom0 kernel or stressor type</div>
+                    </div>
+                    <div class="callout callout-red" style="padding:8px 12px">
+                      <span class="callout-icon">②</span>
+                      <div><strong>Unpinned nrt-hvm guest is most fragile</strong> — up to 62 ms WCET, 88 overflows
+                        under cache stressor</div>
+                    </div>
+                    <div class="callout callout-green" style="padding:8px 12px">
+                      <span class="callout-icon">③</span>
+                      <div><strong>rt5 guest systematically more stable</strong> than nrt guest, whether pinned or not
+                      </div>
+                    </div>
+                    <div class="callout callout-amber" style="padding:8px 12px">
+                      <span class="callout-icon">④</span>
+                      <div><strong>cache stressor most unpredictable</strong> — worst single case (88 overflows) but
+                        harmless with pinning (0 overflows)</div>
+                    </div>
+                    <div class="callout callout-cyan" style="padding:8px 12px">
+                      <span class="callout-icon">⑤</span>
+                      <div><strong>LL vs NRT Dom0:</strong> No clear winner on unpinned guests — interaction with guest
+                        type and stressor is more complex</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
